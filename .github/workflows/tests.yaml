@@ -1,0 +1,20 @@
+on: 
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  deno_ci:
+    uses: cross-org/workflows/.github/workflows/deno-ci.yml@main
+    with:
+      entrypoint: mod.ts
+  bun_ci:
+    uses: cross-org/workflows/.github/workflows/bun-ci.yml@main
+    with:
+      jsr_dependencies: "@cross/test @cross/fs @std/assert @std/path cbor-x"
+  node_ci:
+    uses: cross-org/workflows/.github/workflows/node-ci.yml@main
+    with:
+      jsr_dependencies: "@cross/test @cross/fs @std/assert @std/path cbor-x"
+      test_target: "src/*.test.ts"
