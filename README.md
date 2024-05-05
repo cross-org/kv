@@ -22,12 +22,14 @@ comprehensive overview of your `cross/kv` project.
 
 ### **Installation**
 
+Full installation instructions available at <https://jsr.io/@cross/kv>
+
 ```bash
 # Using npm
-npm install cross/kv
+npx jsr i @cross/kv
 
 # Using Deno
-deno install --unstable -A https://deno.land/x/cross/kv@<version>/mod.ts
+deno add @cross/kv
 ```
 
 Replace `<version>` with the desired version of the package.
