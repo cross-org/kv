@@ -20,14 +20,14 @@ export class CrossKV implements KVStore {
 
   public async open(filePath: string) {
     const indexPath = filePath + ".idx";
-    await this.ensureFile(indexPath);
+    await this.ensurePath(indexPath);
     this.index = new KVIndex(indexPath);
 
     // Initial load
     await this.index.loadIndex();
 
     this.dataPath = filePath + ".data";
-    await this.ensureFile(this.dataPath);
+    await this.ensurePath(this.dataPath);
   }
 
   public async sync() {
@@ -39,11 +39,9 @@ export class CrossKV implements KVStore {
     await this.sync();
   }
 
-  private async ensureFile(filePath: string): Promise<void> {
+  private async ensurePath(filePath: string): Promise<void> {
     if (!await exists(filePath)) {
       await mkdir(dirname(resolve(filePath)), { recursive: true });
-      const fd = await Deno.create(filePath);
-      fd.close();
     }
   }
 
@@ -117,7 +115,11 @@ export class CrossKV implements KVStore {
     // Throw if database isn't open
     this.ensureOpen();
 
-    const fd = await Deno.open(this.dataPath!, { write: true, read: true });
+    const fd = await Deno.open(this.dataPath!, {
+      write: true,
+      read: true,
+      create: true,
+    });
 
     // Get current offset
     const offset = await fd.seek(0, Deno.SeekMode.End);

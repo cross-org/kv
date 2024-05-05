@@ -1,6 +1,3 @@
-Here's an extended README that builds upon your initial draft, providing a more
-comprehensive overview of your `cross/kv` project.
-
 **cross/kv**
 
 ## Efficient cross-runtime Key/Value database for JavaScript and TypeScript
