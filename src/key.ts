@@ -1,8 +1,8 @@
 export const KV_KEY_ALLOWED_CHARS = /^[a-zA-Z0-9\-_]+$/;
 
 export interface KVKeyRange {
-  from?: string;
-  to?: string;
+  from?: string | number;
+  to?: string | number;
 }
 
 export type KVKeyRepresentation = (string | number | KVKeyRange)[];
@@ -46,7 +46,10 @@ export class KVKey {
         }
       }
 
-      if (typeof element !== "string" && typeof element !== "number") {
+      if (
+        typeof element !== "string" && typeof element !== "number" &&
+        !(element.from !== undefined || element.to != undefined)
+      ) {
         throw new TypeError("Key elements must be strings or numbers");
       }
 

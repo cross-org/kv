@@ -1,5 +1,5 @@
 import { exists, readFile, writeFile } from "@cross/fs";
-import type { KVKey } from "./key.ts";
+import type { KVKey, KVKeyRange } from "./key.ts";
 import { decode, encode } from "cbor-x";
 
 // Nested class to represent a node in the index tree
@@ -7,6 +7,7 @@ interface KVIndexContent {
   children: KVIndexNode;
   reference?: number;
 }
+
 type KVIndexNode = Map<string | number, KVIndexContent>;
 
 export class KVIndex {
@@ -72,29 +73,49 @@ export class KVIndex {
 
   get(key: KVKey): number[] {
     const resultSet: number[] = [];
-    function recurse(node: KVIndexContent): void {
-      if (node.reference !== undefined) {
-        resultSet.push(node.reference);
+
+    function recurse(node: KVIndexContent, keyIndex: number): void {
+      if (keyIndex >= key.get().length) {
+        // We've reached the end of the key
+        if (node.reference !== undefined) {
+          resultSet.push(node.reference);
+        }
+        // Recurse into all children
+        for (const childNode of node.children.values()) {
+          recurse(childNode, keyIndex);
+        }
+        return;
       }
 
-      // Recurse into children
-      for (const childNode of node.children.values()) {
-        recurse(childNode);
+      const keyPart = key.get()[keyIndex];
+
+      if (typeof keyPart === "string" || typeof keyPart === "number") {
+        // Standard string/number part
+        const childNode = node.children.get(keyPart);
+        if (childNode) {
+          recurse(childNode, keyIndex + 1);
+        }
+      } else if (typeof keyPart === "object" && keyPart.from && keyPart.to) {
+        // Key range
+        const range = keyPart as KVKeyRange;
+        for (const [index, childNode] of node.children.entries()) {
+          // Iterate over children, comparing the index to the range
+          if (
+            (typeof index === "string" &&
+              (range.from === undefined || index >= (range.from as string)) &&
+              (range.to === undefined || index <= (range.to as string))) ||
+            (typeof index === "number" &&
+              (range.from === undefined || index >= (range.from as number)) &&
+              (range.to === undefined || index <= (range.to as number)))
+          ) {
+            recurse(childNode, keyIndex + 1);
+          }
+        }
       }
     }
 
-    // Start recursion from the appropriate node in the tree
-    let current = this.index;
-
-    for (const part of key.get()) {
-      const currentPart = current.children.get(part as string | number);
-      if (!currentPart) {
-        return []; // Key path not found
-      }
-      current = currentPart;
-    }
-
-    recurse(current);
+    // Start recursion from the root of the tree
+    recurse(this.index, 0);
 
     return resultSet;
   }

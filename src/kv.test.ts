@@ -98,3 +98,43 @@ test("CrossKV: supports multi-level nested keys with numbers", async () => {
   assertEquals(await kvStore.get(["data", "system", 4]), 1.2);
   assertNotEquals(await kvStore.get(["data", "system", 5]), 1.2);
 });
+
+test("CrossKV: supports numeric key ranges", async () => {
+  const tempFilePrefix = await Deno.makeTempFile();
+  const kvStore = new CrossKV();
+  await kvStore.open(tempFilePrefix);
+
+  // Set some values within a range
+  for (let i = 5; i <= 10; i++) {
+    await kvStore.set(["data", i], `Value ${i}`);
+  }
+
+  // Test if the 'get' function returns the expected values
+  const rangeResults = await kvStore.getMany(["data", { from: 7, to: 9 }]);
+  assertEquals(rangeResults, [
+    `Value 7`,
+    `Value 8`,
+    `Value 9`,
+  ]);
+});
+
+test("CrossKV: supports string key ranges", async () => {
+  const tempFilePrefix = await Deno.makeTempFile();
+  const kvStore = new CrossKV();
+  await kvStore.open(tempFilePrefix);
+
+  // Set some values with string keys
+  await kvStore.set(["files", "doc_a"], "Document A");
+  await kvStore.set(["files", "doc_b"], "Document B");
+  await kvStore.set(["files", "image_1"], "Image 1");
+
+  // Get all values within the "doc_" range
+  const rangeResults = await kvStore.getMany(["files", {
+    from: "doc_",
+    to: "doc_z",
+  }]);
+  assertEquals(rangeResults, [
+    "Document A",
+    "Document B",
+  ]);
+});

@@ -35,6 +35,10 @@ export class CrossKV implements KVStore {
     await this.index?.saveIndex();
   }
 
+  public async close() {
+    await this.sync();
+  }
+
   private async ensureFile(filePath: string): Promise<void> {
     if (!await exists(filePath)) {
       await mkdir(dirname(resolve(filePath)), { recursive: true });
@@ -63,7 +67,7 @@ export class CrossKV implements KVStore {
     this.ensureOpen();
 
     // Ensure the key is ok
-    const validatedKey = new KVKey(key);
+    const validatedKey = new KVKey(key, true);
 
     const offsets = this.index!.get(validatedKey)!;
 
