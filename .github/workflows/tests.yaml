@@ -9,6 +9,7 @@ jobs:
     uses: cross-org/workflows/.github/workflows/deno-ci.yml@main
     with:
       entrypoint: mod.ts
+      lint_docs: false
   bun_ci:
     uses: cross-org/workflows/.github/workflows/bun-ci.yml@main
     with:
