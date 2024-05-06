@@ -1,9 +1,10 @@
 import { assertEquals, assertNotEquals, assertRejects } from "@std/assert";
 import { test } from "@cross/test";
 import { CrossKV } from "./kv.ts";
+import { tempfile } from "@cross/fs";
 
 test("CrossKV: set, get and delete (numbers and strings)", async () => {
-  const tempFilePrefix = await Deno.makeTempFile();
+  const tempFilePrefix = await tempfile();
   const kvStore = new CrossKV();
   await kvStore.open(tempFilePrefix);
   await kvStore.set(["name"], "Alice");
@@ -19,7 +20,7 @@ test("CrossKV: set, get and delete (numbers and strings)", async () => {
 });
 
 test("CrossKV: set, get and delete (objects)", async () => {
-  const tempFilePrefix = await Deno.makeTempFile();
+  const tempFilePrefix = await tempfile();
   const kvStore = new CrossKV();
   await kvStore.open(tempFilePrefix);
   await kvStore.set(["name"], { data: "Alice" });
@@ -35,7 +36,7 @@ test("CrossKV: set, get and delete (objects)", async () => {
 });
 
 test("CrossKV: set, get and delete (dates)", async () => {
-  const tempFilePrefix = await Deno.makeTempFile();
+  const tempFilePrefix = await tempfile();
   const kvStore = new CrossKV();
   await kvStore.open(tempFilePrefix);
   const date = new Date();
@@ -50,7 +51,7 @@ test("CrossKV: set, get and delete (dates)", async () => {
 });
 
 test("CrossKV: throws on duplicate key insertion", async () => {
-  const tempFilePrefix = await Deno.makeTempFile();
+  const tempFilePrefix = await tempfile();
   const kvStore = new CrossKV();
   await kvStore.open(tempFilePrefix);
 
@@ -59,23 +60,23 @@ test("CrossKV: throws on duplicate key insertion", async () => {
   assertRejects(
     async () => await kvStore.set(["name"], "Bob"),
     Error,
-    "Duplicate key: name",
+    "Duplicate key: Key already exists",
   );
 });
 
 test("CrossKV: throws when trying to delete a non-existing key", async () => {
-  const tempFilePrefix = await Deno.makeTempFile();
+  const tempFilePrefix = await tempfile();
   const kvStore = new CrossKV();
   await kvStore.open(tempFilePrefix);
 
-  assertRejects(
-    () => kvStore.delete(["unknownKey"]),
+  await assertRejects(
+    async () => await kvStore.delete(["unknownKey"]),
     Error,
   ); // We don't have a specific error type for this yet
 });
 
 test("CrossKV: supports multi-level nested keys", async () => {
-  const tempFilePrefix = await Deno.makeTempFile();
+  const tempFilePrefix = await tempfile();
   const kvStore = new CrossKV();
   await kvStore.open(tempFilePrefix);
 
@@ -87,7 +88,7 @@ test("CrossKV: supports multi-level nested keys", async () => {
 });
 
 test("CrossKV: supports multi-level nested keys with numbers", async () => {
-  const tempFilePrefix = await Deno.makeTempFile();
+  const tempFilePrefix = await tempfile();
   const kvStore = new CrossKV();
   await kvStore.open(tempFilePrefix);
 
@@ -100,7 +101,7 @@ test("CrossKV: supports multi-level nested keys with numbers", async () => {
 });
 
 test("CrossKV: supports numeric key ranges", async () => {
-  const tempFilePrefix = await Deno.makeTempFile();
+  const tempFilePrefix = await tempfile();
   const kvStore = new CrossKV();
   await kvStore.open(tempFilePrefix);
 
@@ -119,7 +120,7 @@ test("CrossKV: supports numeric key ranges", async () => {
 });
 
 test("CrossKV: supports string key ranges", async () => {
-  const tempFilePrefix = await Deno.makeTempFile();
+  const tempFilePrefix = await tempfile();
   const kvStore = new CrossKV();
   await kvStore.open(tempFilePrefix);
 

@@ -1,30 +1,46 @@
-import { exists, readFile, writeFile } from "@cross/fs";
 import type { KVKey, KVKeyRange } from "./key.ts";
-import { decode, encode } from "cbor-x";
+import { type KVFinishedTransaction, KVOperation } from "./transaction.ts";
 
-// Nested class to represent a node in the index tree
+/**
+ * Represents content of a node within the KVIndex tree.
+ */
 interface KVIndexContent {
-  children: KVIndexNode;
+  /**
+   * Holds references to child nodes in the index.
+   */
+  children: KVIndexNodes;
+  /**
+   * Optional reference to a data offset. Present for leaf nodes.
+   */
   reference?: number;
 }
 
-type KVIndexNode = Map<string | number, KVIndexContent>;
+/**
+ * A Map containing child keys and their corresponding Node within the tree.
+ */
+type KVIndexNodes = Map<string | number, KVIndexContent>;
 
+/**
+ * In-memory representation of a Key-Value index enabling efficient key-based lookups.
+ * It uses a tree-like structure for fast prefix and range-based searches.
+ */
 export class KVIndex {
-  private indexPath: string;
   private index: KVIndexContent;
-  private isDirty: boolean = false;
-  constructor(indexPath: string) {
-    this.indexPath = indexPath;
+  constructor() {
     this.index = {
       children: new Map(),
     };
   }
 
-  add(key: KVKey, entry: number, overwrite: boolean = false) {
+  /**
+   * Adds an entry to the index.
+   * @param transaction - The transaction to add
+   * @throws {Error} If 'overwrite' is false and a duplicate key is found.
+   */
+  add(transaction: KVFinishedTransaction) {
     let current = this.index;
     let lastPart;
-    for (const part of key.get()) {
+    for (const part of transaction.key.get()) {
       lastPart = part;
       const currentPart = current.children?.get(part as string | number);
       if (currentPart) {
@@ -38,19 +54,22 @@ export class KVIndex {
       }
     }
     if (current!.reference === undefined) {
-      current!.reference = entry;
-    } else if (overwrite) {
-      /* ToDo: Some sort of callback if overwritten? */
-      current!.reference = entry;
+      current!.reference = transaction.offset;
+    } else if (transaction.oper === KVOperation.UPSERT) {
+      current!.reference = transaction.offset;
     } else {
       throw new Error(`Duplicate key: ${lastPart}`);
     }
-    this.isDirty = true;
   }
 
-  delete(key: KVKey): number | undefined {
+  /**
+   * Removes an entry from the index based on a provided key.
+   * @param transaction - The transaction to remove.
+   * @returns The removed data row reference, or undefined if the key was not found.
+   */
+  delete(transaction: KVFinishedTransaction): number | undefined {
     let current = this.index;
-    for (const part of key.get()) {
+    for (const part of transaction.key.get()) {
       const currentPart = current.children.get(part as (string | number));
       if (!currentPart || !currentPart.children) { // Key path not found
         return undefined;
@@ -62,15 +81,17 @@ export class KVIndex {
     const oldReference = current.reference;
     current.reference = undefined;
     delete current.reference;
-    this.isDirty = true;
 
-    /* ToDo recursive cleanup if (!current.children.size) {
-      delete current.children;
-    }*/
-
+    // No need to cleanup as leftover nodes will be lost at next rebuild
     return oldReference;
   }
 
+  /**
+   * Retrieves a list of data row references associated with a given key.
+   * Supports prefix and range-based searches.
+   * @param key - The key to search for (can include ranges)
+   * @returns An array of data row references.
+   */
   get(key: KVKey): number[] {
     const resultSet: number[] = [];
 
@@ -118,24 +139,5 @@ export class KVIndex {
     recurse(this.index, 0);
 
     return resultSet;
-  }
-
-  async loadIndex(): Promise<KVIndexContent> {
-    if (await exists(this.indexPath)) {
-      const fileContents = await readFile(this.indexPath);
-      try {
-        const index = decode(fileContents);
-        this.index = index as KVIndexContent;
-        this.isDirty = false;
-      } catch (_e) { /* Ignore for now */ }
-    }
-    return this.index;
-  }
-
-  async saveIndex(): Promise<void> {
-    if (!this.isDirty) return;
-    const serializedIndex = encode(this.index);
-    await writeFile(this.indexPath, serializedIndex);
-    this.isDirty = false;
   }
 }

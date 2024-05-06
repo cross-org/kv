@@ -1,57 +1,121 @@
 // deno-lint-ignore-file no-explicit-any
-import { exists, mkdir } from "@cross/fs";
 import { KVIndex } from "./index.ts";
-
-import { dirname, resolve } from "@std/path";
 import { KVKey, type KVKeyRepresentation } from "./key.ts";
-import { decode, encode } from "cbor-x";
-export interface KVStore {
-  set(key: KVKeyRepresentation, value: any): Promise<void>;
-  get(key: KVKeyRepresentation): Promise<any | null>;
-  delete(key: KVKeyRepresentation): Promise<void>;
-}
+import { ensureFile, readAtPosition, writeAtPosition } from "./utils/file.ts";
+import { readFile, stat } from "@cross/fs";
+import {
+  type KVFinishedTransaction,
+  KVOperation,
+  type KVPendingTransaction,
+} from "./transaction.ts";
 
-export class CrossKV implements KVStore {
-  private index?: KVIndex;
+import { addExtension, Decoder, Encoder } from "cbor-x";
+
+const extEncoder = new Encoder();
+const extDecoder = new Decoder();
+
+addExtension({
+  Class: KVKey,
+  tag: 43331, // register our own extension code (a tag code)
+  //@ts-ignore external
+  encode(instance, encode) {
+    // define how your custom class should be encoded
+    // @ts-ignore external
+    encode(instance.get()); // return a buffer
+  },
+  //@ts-ignore external
+  decode(data) {
+    // @ts-ignore external
+    return new KVKey(data as (string | number)[]); // decoded value from buffer
+  },
+});
+
+/**
+ * Cross-platform Key-Value store implementation backed by file storage.
+ */
+export class CrossKV {
+  private index: KVIndex = new KVIndex();
+
+  private pendingTransactions: KVPendingTransaction[] = [];
+
   private dataPath?: string;
+  private transactionsPath?: string;
 
   constructor() {
   }
 
+  /**
+   * Opens the Key-Value store based on a provided file path.
+   * Initializes the index and data files.
+   * @param filePath - Path to the base file for the KV store.
+   *                   Index and data files will be derived from this path.
+   */
   public async open(filePath: string) {
-    const indexPath = filePath + ".idx";
-    await this.ensurePath(indexPath);
-    this.index = new KVIndex(indexPath);
-
-    // Initial load
-    await this.index.loadIndex();
+    const transactionsPath = filePath + ".tlog";
+    await ensureFile(transactionsPath);
+    this.transactionsPath = transactionsPath;
 
     this.dataPath = filePath + ".data";
-    await this.ensurePath(this.dataPath);
+    await ensureFile(this.dataPath);
+
+    // Initial load of the transaction log into the index
+    await this.restoreTransactionLog();
   }
 
-  public async sync() {
-    // Save index if needed
-    await this.index?.saveIndex();
-  }
+  /**
+   * Loads all KVFinishedTransaction entries from the transaction log and
+   * replays them to rebuild the index state.
+   */
+  private async restoreTransactionLog() {
+    this.ensureOpen();
 
-  public async close() {
-    await this.sync();
-  }
+    const transactionLog = await readFile(this.transactionsPath!);
 
-  private async ensurePath(filePath: string): Promise<void> {
-    if (!await exists(filePath)) {
-      await mkdir(dirname(resolve(filePath)), { recursive: true });
+    let position = 0;
+    while (position < transactionLog.byteLength) {
+      const dataLength = new DataView(transactionLog.buffer).getUint16(
+        position,
+        false,
+      );
+      try {
+        const transaction: KVFinishedTransaction = extDecoder.decode(
+          transactionLog.slice(position + 2, position + 2 + dataLength),
+        );
+        // Apply transaction to the index
+        switch (transaction.oper) {
+          case KVOperation.INSERT:
+          case KVOperation.UPSERT:
+            this.index.add(transaction);
+            break;
+          case KVOperation.DELETE:
+            this.index.delete(transaction);
+            break;
+        }
+      } catch (e) {
+        //console.error(e);
+      }
+
+      position += 2 + dataLength; // Move to the next transaction
     }
   }
 
+  /**
+   * Ensures the database is open, throwing an error if it's not.
+   * @throws {Error} If the database is not open.
+   */
   private ensureOpen(): void {
     if (!this.index || !this.dataPath) {
       throw new Error("Database not open");
     }
   }
 
-  async get(key: KVKeyRepresentation): Promise<any | null> {
+  /**
+   * Retrieves the first value associated with the given key (limit).
+   * @param key - Representation of the key.
+   * @param limit - Optional maximum number of values to retrieve.
+   * @returns the retrieved value, or null
+   */
+  public async get(key: KVKeyRepresentation): Promise<any | null> {
     const result = await this.getMany(key, 1);
     if (result.length) {
       return result[0];
@@ -60,82 +124,92 @@ export class CrossKV implements KVStore {
     }
   }
 
+  /**
+   * Retrieves one or more values associated with the given key (limit).
+   * @param key - Representation of the key.
+   * @param limit - Optional maximum number of values to retrieve.
+   * @returns An array of retrieved values.
+   */
   async getMany(key: KVKeyRepresentation, limit?: number): Promise<any[]> {
-    // Ensure the database is open
     this.ensureOpen();
-
-    // Ensure the key is ok
     const validatedKey = new KVKey(key, true);
-
     const offsets = this.index!.get(validatedKey)!;
 
     if (offsets === null || offsets.length === 0) {
       return [];
     }
-
     const results: any[] = [];
     let count = 0;
 
     for (const offset of offsets) {
       count++;
-
-      const fd = await Deno.open(this.dataPath!, { read: true, write: false });
-      await fd.seek(offset, Deno.SeekMode.Start);
-
-      // Read length prefix
-      const lengthPrefixBuffer = new Uint8Array(2);
-      await fd.read(lengthPrefixBuffer);
+      const lengthPrefixBuffer = await readAtPosition(
+        this.dataPath!,
+        2,
+        offset,
+      );
       const dataLength = new DataView(lengthPrefixBuffer.buffer).getUint16(
         0,
         false,
-      ); // Big endian
-
-      // Read the data
-      const dataBuffer = new Uint8Array(dataLength);
-      await fd.read(dataBuffer);
-
-      // Read and validate null terminator
-      const nullTerminatorBuffer = new Uint8Array(1);
-      await fd.read(nullTerminatorBuffer);
-
-      if (nullTerminatorBuffer[0] !== 0x00) {
-        await fd.close();
-        throw new Error("Invalid data format: Missing null terminator");
-      }
-
-      await fd.close();
-      results.push(await this.decodeValue(dataBuffer));
-
+      );
+      const dataBuffer = await readAtPosition(
+        this.dataPath!,
+        dataLength,
+        offset + 2,
+      );
+      results.push(extDecoder.decode(dataBuffer));
       if (limit && count >= limit) return results;
     }
     return results;
   }
 
-  async writeData(encodedData: Uint8Array): Promise<number> { // Return the row number
-    // Throw if database isn't open
+  /**
+   * Encodes a value and adds it to the list of pending transactions
+   * @param encodedData - The CBOR-encoded value to write.
+   * @returns The offset at which the data was written.
+   */
+  private async writeData(encodedData: Uint8Array): Promise<number> {
     this.ensureOpen();
 
-    const fd = await Deno.open(this.dataPath!, {
-      write: true,
-      read: true,
-      create: true,
-    });
-
-    // Get current offset
-    const offset = await fd.seek(0, Deno.SeekMode.End);
+    // Get current offset (since we're appending)
+    const stats = await stat(this.dataPath!); // Use fs.fstat instead
+    const originalPosition = stats.size;
 
     // Add length prefix (2 bytes)
-    const lengthPrefix = new Uint8Array(2);
-    new DataView(lengthPrefix.buffer).setUint16(0, encodedData.length, false); // Big endian
-    await fd.write(lengthPrefix);
-    await fd.write(encodedData);
-    await fd.write(new Uint8Array([0x00])); // Add a null terminator
-    await fd.close();
-
-    return offset; // Return the offset
+    const fullData = new Uint8Array(2 + encodedData.length);
+    new DataView(fullData.buffer).setUint16(0, encodedData.length, false);
+    fullData.set(encodedData, 2);
+    await writeAtPosition(this.dataPath!, fullData, originalPosition);
+    return originalPosition; // Return the offset (where the write started)
   }
 
-  async set(
+  /**
+   * Encodes a value and adds it to the list of pending transactions
+   * @param encodedData - The CBOR-encoded value to write.
+   * @returns The offset at which the data was written.
+   */
+  private async writeTransaction(encodedData: Uint8Array): Promise<number> {
+    this.ensureOpen();
+
+    // Get current offset (since we're appending)
+    const stats = await stat(this.transactionsPath!); // Use fs.fstat instead
+    const originalPosition = stats.size;
+
+    // Add length prefix (2 bytes)
+    const fullData = new Uint8Array(2 + encodedData.length);
+    new DataView(fullData.buffer).setUint16(0, encodedData.length);
+    fullData.set(encodedData, 2);
+    await writeAtPosition(this.transactionsPath!, fullData, originalPosition);
+    return originalPosition; // Return the offset (where the write started)
+  }
+
+  /**
+   * Stores a value associated with the given key, optionally overwriting existing values.
+   * @param key - Representation of the key.
+   * @param value - The value to store.
+   * @param overwrite - If true, overwrites any existing value for the key.
+   */
+  public async set(
     key: KVKeyRepresentation,
     value: any,
     overwrite: boolean = false,
@@ -146,37 +220,112 @@ export class CrossKV implements KVStore {
     // Ensure the key is ok
     const validatedKey = new KVKey(key);
 
-    const encodedData = await this.encodeValue(value);
-    const rowNumber = await this.writeData(encodedData);
-    this.index!.add(validatedKey, rowNumber, overwrite); // Update KVIndex
+    // Encode data
+    const encodedData = extEncoder.encode(value);
+
+    // Create transaction
+    const pendingTransaction: KVPendingTransaction = {
+      key: validatedKey,
+      oper: overwrite ? KVOperation.UPSERT : KVOperation.INSERT,
+      ts: new Date().getTime(),
+      data: encodedData,
+    };
+
+    // Enqueue transaction
+    await this.runTransaction(pendingTransaction);
   }
 
-  async delete(key: KVKeyRepresentation): Promise<void> {
+  /**
+   * Deletes the key-value pair with the given key.
+   * @param key - Representation of the key.
+   * @throws {Error} If the key is not found.
+   */
+  async delete(key: KVKeyRepresentation): Promise<number> {
     // Throw if database isn't open
     this.ensureOpen();
 
     // Ensure the key is ok
     const validatedKey = new KVKey(key);
 
-    if (this.index!.delete(validatedKey) !== undefined) {
-      await this.index!.saveIndex();
-    } else {
-      throw new Error(`Key not found: ${validatedKey.getKeyRepresentation()}`);
+    // Create transaction
+    const pendingTransaction: KVPendingTransaction = {
+      key: validatedKey,
+      oper: KVOperation.DELETE,
+      ts: new Date().getTime(),
+    };
+
+    return await this.runTransaction(pendingTransaction);
+  }
+
+  /**
+   * Checks the prerequisites of a single transaction
+   *
+   * @param pendingTransaction - The transaction to execute.
+   */
+  checkTransaction(pendingTransaction: KVPendingTransaction): void {
+    this.ensureOpen();
+
+    // Check that the key doesn't exist
+    if (
+      pendingTransaction.oper === KVOperation.INSERT &&
+      this.index.get(pendingTransaction.key).length > 0
+    ) {
+      throw new Error("Duplicate key: Key already exists");
     }
-    // ToDo: logic to free up space in the data file if needed
   }
 
-  private encodeValue(value: any): Uint8Array {
-    const rawData = encode(value);
-    const buffer = new Uint8Array(rawData.length + 2);
-    buffer[0] = rawData.length;
-    buffer.set(rawData, 2); // Copy compressed data after the type id
-    return buffer;
+  /**
+   * Processes a single transaction and makes necessary updates to the index and
+   * data files.
+   *
+   * File locks should be handled outside this function.
+   *
+   * @param pendingTransaction - The transaction to execute.
+   */
+  async runTransaction(
+    pendingTransaction: KVPendingTransaction,
+  ): Promise<number> {
+    this.ensureOpen();
+
+    // 1. Check that the transaction can be carried out
+    // - Will throw on error
+    this.checkTransaction(pendingTransaction);
+
+    // 12. Write Data if Needed
+    let offset;
+    if (pendingTransaction.data !== undefined) {
+      offset = await this.writeData(pendingTransaction.data);
+    }
+
+    // 3. Create the finished transaction
+    const finishedTransaction: KVFinishedTransaction = {
+      key: pendingTransaction.key,
+      oper: pendingTransaction.oper,
+      ts: pendingTransaction.ts,
+      offset: offset,
+    };
+
+    // 4. Update the Index
+    switch (pendingTransaction.oper) {
+      case KVOperation.UPSERT:
+      case KVOperation.INSERT:
+        this.index.add(finishedTransaction);
+        break;
+      case KVOperation.DELETE: {
+        const deletedReference = this.index.delete(finishedTransaction);
+        if (deletedReference === undefined) {
+          throw new Error("Could not delete entry, key not found.");
+        }
+        break;
+      }
+    }
+
+    // 5. Persist the Transaction Log
+    const encodedTransaction = extEncoder.encode(finishedTransaction);
+    return await this.writeTransaction(encodedTransaction); // Append
   }
 
-  private decodeValue(data: Uint8Array): any {
-    const view = new DataView(data.buffer);
-    const dataLength = view.getUint16(0);
-    return decode(data.slice(2, dataLength));
+  public close() {
+    /* No-Op, for now */
   }
 }

@@ -1,21 +1,19 @@
 **cross/kv**
 
-## Efficient cross-runtime Key/Value database for JavaScript and TypeScript
+A cross-platform, hierarchical Key/Value database for JavaScript and TypeScript,
+that work in all major runtimes (Node.js, Deno and Bun).
 
 ### **Features**
 
 - **Simple Key/Value Storage:** Store and retrieve data easily using
   hierarchical keys.
-- **Cross-Runtime Compatibility:** Works in Node.js, Deno, browser environments,
-  and potentially other JavaScript runtimes.
-- **Flexible Data Types:** Support for strings, numbers, objects, dates, and
-  more.
+- **Cross-Runtime Compatibility:** Works in Node.js, Deno and Bun.
+- **Flexible Data Types:** Support for strings, numbers, objects, dates, maps,
+  sets and more.
 - **Hierarchical Structure:** Organize data with multi-level keys for a logical
   structure.
-- **Key Ranges:** Retrieve ranges of data efficiently using `KVKeyRange`
-  objects.
-- **Indexed:** Data is indexed to provide faster lookups (detail how your
-  indexing works).
+- **Key Ranges:** Retrieve ranges of data efficiently using key ranges.
+- **Indexed:** In-memory index to provide faster lookups of large datasets.
 
 ### **Installation**
 
@@ -62,7 +60,7 @@ import { CrossKV } from "@cross/kv";
 const kvStore = new CrossKV();
 
 // Open the database
-await kvStore.open("./lab/db19");
+await kvStore.open("./mydatabase/");
 
 // Store some values/documents indexed by users.by_id.<id>
 await kvStore.set(["users", "by_id", 1], {
