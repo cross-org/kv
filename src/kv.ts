@@ -37,6 +37,7 @@ export class CrossKV {
   private index: KVIndex = new KVIndex();
 
   private pendingTransactions: KVPendingTransaction[] = [];
+  private isInTransaction: boolean = false;
 
   private dataPath?: string;
   private transactionsPath?: string;
@@ -60,6 +61,32 @@ export class CrossKV {
 
     // Initial load of the transaction log into the index
     await this.restoreTransactionLog();
+  }
+
+  public beginTransaction() {
+    if (this.isInTransaction) throw new Error("Already in a transaction");
+    this.isInTransaction = true;
+  }
+
+  public async endTransaction(): Promise<Error[]> {
+    if (!this.isInTransaction) throw new Error("Not in a transaction");
+
+    // Run transactions
+    let p = this.pendingTransactions.pop();
+    const errors: Error[] = [];
+    while (p) {
+      try {
+        await this.runTransaction(p);
+      } catch (e) {
+        errors.push(e);
+      }
+      p = this.pendingTransactions.pop();
+    }
+
+    // Done
+    this.isInTransaction = false;
+
+    return errors;
   }
 
   /**
@@ -232,7 +259,12 @@ export class CrossKV {
     };
 
     // Enqueue transaction
-    await this.runTransaction(pendingTransaction);
+    if (!this.isInTransaction) {
+      await this.runTransaction(pendingTransaction);
+    } else {
+      this.checkTransaction(pendingTransaction);
+      this.pendingTransactions.push(pendingTransaction);
+    }
   }
 
   /**
@@ -240,7 +272,7 @@ export class CrossKV {
    * @param key - Representation of the key.
    * @throws {Error} If the key is not found.
    */
-  async delete(key: KVKeyRepresentation): Promise<number> {
+  async delete(key: KVKeyRepresentation): Promise<number | undefined> {
     // Throw if database isn't open
     this.ensureOpen();
 
@@ -254,7 +286,12 @@ export class CrossKV {
       ts: new Date().getTime(),
     };
 
-    return await this.runTransaction(pendingTransaction);
+    if (!this.isInTransaction) {
+      return await this.runTransaction(pendingTransaction);
+    } else {
+      this.checkTransaction(pendingTransaction);
+      this.pendingTransactions.push(pendingTransaction);
+    }
   }
 
   /**
