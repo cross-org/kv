@@ -116,7 +116,10 @@ export class KVIndex {
         if (childNode) {
           recurse(childNode, keyIndex + 1);
         }
-      } else if (typeof keyPart === "object" && keyPart.from && keyPart.to) {
+      } else if (
+        typeof keyPart === "object" &&
+        (keyPart.from !== undefined || keyPart.to !== undefined)
+      ) {
         // Key range
         const range = keyPart as KVKeyRange;
         for (const [index, childNode] of node.children.entries()) {

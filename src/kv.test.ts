@@ -1,4 +1,4 @@
-import { assertEquals, assertNotEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { test } from "@cross/test";
 import { CrossKV } from "./kv.ts";
 import { tempfile } from "@cross/fs";
@@ -10,13 +10,13 @@ test("CrossKV: set, get and delete (numbers and strings)", async () => {
   await kvStore.set(["name"], "Alice");
   await kvStore.set(["age"], 30);
 
-  assertEquals(await kvStore.get(["name"]), "Alice");
-  assertEquals(await kvStore.get(["age"]), 30);
+  assertEquals((await kvStore.get(["name"]))?.data, "Alice");
+  assertEquals((await kvStore.get(["age"]))?.data, 30);
 
   await kvStore.delete(["name"]);
 
   assertEquals(await kvStore.get(["name"]), null);
-  assertEquals(await kvStore.get(["age"]), 30);
+  assertEquals((await kvStore.get(["age"]))?.data, 30);
 });
 
 test("CrossKV: set, get and delete (objects)", async () => {
@@ -26,13 +26,13 @@ test("CrossKV: set, get and delete (objects)", async () => {
   await kvStore.set(["name"], { data: "Alice" });
   await kvStore.set(["age"], { data: 30 });
 
-  assertEquals(await kvStore.get(["name"]), { data: "Alice" });
-  assertEquals(await kvStore.get(["age"]), { data: 30 });
+  assertEquals((await kvStore.get(["name"]))?.data, { data: "Alice" });
+  assertEquals((await kvStore.get(["age"]))?.data, { data: 30 });
 
   await kvStore.delete(["name"]);
 
   assertEquals(await kvStore.get(["name"]), null);
-  assertEquals(await kvStore.get(["age"]), { data: 30 });
+  assertEquals((await kvStore.get(["age"]))?.data, { data: 30 });
 });
 
 test("CrossKV: set, get and delete (dates)", async () => {
@@ -41,9 +41,12 @@ test("CrossKV: set, get and delete (dates)", async () => {
   await kvStore.open(tempFilePrefix);
   const date = new Date();
   await kvStore.set(["pointintime"], date);
-  assertEquals((await kvStore.get(["pointintime"])).getTime(), date.getTime());
   assertEquals(
-    (await kvStore.get(["pointintime"])).toLocaleString(),
+    ((await kvStore.get(["pointintime"]))!.data! as Date).getTime(),
+    date.getTime(),
+  );
+  assertEquals(
+    (await kvStore.get(["pointintime"]))?.data?.toLocaleString(),
     date.toLocaleString(),
   );
   await kvStore.delete(["pointintime"]);
@@ -83,8 +86,8 @@ test("CrossKV: supports multi-level nested keys", async () => {
   await kvStore.set(["data", "user", "name"], "Alice");
   await kvStore.set(["data", "system", "version"], 1.2);
 
-  assertEquals(await kvStore.get(["data", "user", "name"]), "Alice");
-  assertEquals(await kvStore.get(["data", "system", "version"]), 1.2);
+  assertEquals((await kvStore.get(["data", "user", "name"]))?.data, "Alice");
+  assertEquals((await kvStore.get(["data", "system", "version"]))?.data, 1.2);
 });
 
 test("CrossKV: supports multi-level nested keys with numbers", async () => {
@@ -95,9 +98,9 @@ test("CrossKV: supports multi-level nested keys with numbers", async () => {
   await kvStore.set(["data", "user", 4], "Alice");
   await kvStore.set(["data", "system", 4], 1.2);
 
-  assertEquals(await kvStore.get(["data", "user", 4]), "Alice");
-  assertEquals(await kvStore.get(["data", "system", 4]), 1.2);
-  assertNotEquals(await kvStore.get(["data", "system", 5]), 1.2);
+  assertEquals((await kvStore.get(["data", "user", 4]))?.data, "Alice");
+  assertEquals((await kvStore.get(["data", "system", 4]))?.data, 1.2);
+  assertEquals(await kvStore.get(["data", "system", 5]), null);
 });
 
 test("CrossKV: supports numeric key ranges", async () => {
@@ -112,11 +115,10 @@ test("CrossKV: supports numeric key ranges", async () => {
 
   // Test if the 'get' function returns the expected values
   const rangeResults = await kvStore.getMany(["data", { from: 7, to: 9 }]);
-  assertEquals(rangeResults, [
-    `Value 7`,
-    `Value 8`,
-    `Value 9`,
-  ]);
+  assertEquals(rangeResults.length, 3);
+  assertEquals(rangeResults[0].data, "Value 7");
+  assertEquals(rangeResults[1].data, "Value 8");
+  assertEquals(rangeResults[2].data, "Value 9");
 });
 
 test("CrossKV: supports string key ranges", async () => {
@@ -134,8 +136,6 @@ test("CrossKV: supports string key ranges", async () => {
     from: "doc_",
     to: "doc_z",
   }]);
-  assertEquals(rangeResults, [
-    "Document A",
-    "Document B",
-  ]);
+  assertEquals(rangeResults.length, 2);
+  assertEquals(rangeResults[0].data, "Document A");
 });

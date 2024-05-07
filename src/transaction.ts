@@ -53,5 +53,5 @@ export interface KVPendingTransaction {
   /**
    * Actual data for this transaction, ready to be written
    */
-  data?: Uint8Array;
+  data?: unknown;
 }

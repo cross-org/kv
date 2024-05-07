@@ -27,19 +27,25 @@ let crossIter = 0;
 let denoIter = 0;
 
 await Deno.bench("cross_kv_set", async () => {
-  await crossStore.set(["testKey", crossIter++], { data: "testData" });
+  await crossStore.set(["testKey", crossIter++], {
+    data: "testData",
+    ts: new Date(),
+  });
 });
 
 await Deno.bench("deno_kv_set", async () => {
-  await denoStore.set(["testKey", denoIter++], { data: "testData" });
+  await denoStore.set(["testKey", denoIter++], {
+    data: "testData",
+    ts: new Date(),
+  });
 });
 
 await Deno.bench("cross_kv_get", async () => {
-  await crossStore.get(["testKey", crossIter--]);
+  await crossStore.get(["testKey", 3]);
 });
 
 await Deno.bench("deno_kv_get", async () => {
-  await denoStore.get(["testKey", crossIter--]);
+  await denoStore.get(["testKey", 3]);
 });
 
 //await cleanup();

@@ -1,7 +1,7 @@
 **cross/kv**
 
 A cross-platform, hierarchical Key/Value database for JavaScript and TypeScript,
-that work in all major runtimes (Node.js, Deno and Bun).
+designed to work in all major runtimes (Node.js, Deno, and Bun).
 
 ### **Features**
 
@@ -21,13 +21,14 @@ Full installation instructions available at <https://jsr.io/@cross/kv>
 
 ```bash
 # Using npm
-npx jsr i @cross/kv
+npx jsr add @cross/kv
 
 # Using Deno
 deno add @cross/kv
-```
 
-Replace `<version>` with the desired version of the package.
+# Using bun
+bunx jsr add @cross/kv
+```
 
 ### **Simple Usage**
 
@@ -42,7 +43,7 @@ await kvStore.set(["data", "username"], "Alice");
 
 // Get a value
 const username = await kvStore.get(["data", "username"]);
-console.log(username); // Output: 'Alice'
+console.log(username); // Output: { ts: <numeric timestamp>, data "Alice" }
 
 // Delete a key
 await kvStore.delete(["data", "username"]);
@@ -110,11 +111,12 @@ await kvStore.close();
 
 - `CrossKV` class
   - `open(filepath)`
-  - `set(key, value)`
+  - `set(key, value, overwrite?)`
   - `get(key)`
   - `getMany(key)`
   - `delete(key)`
-  - `sync()`
+  - `beginTransaction()`
+  - `endTransaction()`
   - `close()`
 - `KVKey` class (Detail the constructor and methods)
 - `KVKeyRange` interface

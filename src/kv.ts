@@ -8,27 +8,22 @@ import {
   KVOperation,
   type KVPendingTransaction,
 } from "./transaction.ts";
+import { extDecoder, extEncoder } from "./cbor.ts";
 
-import { addExtension, Decoder, Encoder } from "cbor-x";
+/**
+ * Represents a single data entry within the Key-Value store.
+ */
+export interface KVDataEntry {
+  /**
+   * The timestamp (milliseconds since epoch) when the entry was created or modified.
+   */
+  ts: number;
 
-const extEncoder = new Encoder();
-const extDecoder = new Decoder();
-
-addExtension({
-  Class: KVKey,
-  tag: 43331, // register our own extension code (a tag code)
-  //@ts-ignore external
-  encode(instance, encode) {
-    // define how your custom class should be encoded
-    // @ts-ignore external
-    encode(instance.get()); // return a buffer
-  },
-  //@ts-ignore external
-  decode(data) {
-    // @ts-ignore external
-    return new KVKey(data as (string | number)[]); // decoded value from buffer
-  },
-});
+  /**
+   * The actual data stored in the Key-Value store. Can be any type.
+   */
+  data: unknown;
+}
 
 /**
  * Cross-platform Key-Value store implementation backed by file storage.
@@ -42,12 +37,12 @@ export class CrossKV {
   private dataPath?: string;
   private transactionsPath?: string;
 
-  constructor() {
-  }
+  constructor() {}
 
   /**
    * Opens the Key-Value store based on a provided file path.
    * Initializes the index and data files.
+   *
    * @param filePath - Path to the base file for the KV store.
    *                   Index and data files will be derived from this path.
    */
@@ -63,11 +58,21 @@ export class CrossKV {
     await this.restoreTransactionLog();
   }
 
+  /**
+   * Begins a new transaction.
+   * @throws {Error} If already in a transaction.
+   */
   public beginTransaction() {
     if (this.isInTransaction) throw new Error("Already in a transaction");
     this.isInTransaction = true;
   }
 
+  /**
+   * Ends the current transaction, executing all pending operations.
+   *
+   * @returns {Promise<Error[]>} A promise resolving to an array of errors
+   *                             encountered during transaction execution (empty if successful).
+   */
   public async endTransaction(): Promise<Error[]> {
     if (!this.isInTransaction) throw new Error("Not in a transaction");
 
@@ -92,6 +97,8 @@ export class CrossKV {
   /**
    * Loads all KVFinishedTransaction entries from the transaction log and
    * replays them to rebuild the index state.
+   *
+   * @private
    */
   private async restoreTransactionLog() {
     this.ensureOpen();
@@ -118,8 +125,8 @@ export class CrossKV {
             this.index.delete(transaction);
             break;
         }
-      } catch (e) {
-        //console.error(e);
+      } catch (_e) {
+        throw new Error("Error while encoding data");
       }
 
       position += 2 + dataLength; // Move to the next transaction
@@ -128,6 +135,8 @@ export class CrossKV {
 
   /**
    * Ensures the database is open, throwing an error if it's not.
+   *
+   * @private
    * @throws {Error} If the database is not open.
    */
   private ensureOpen(): void {
@@ -137,12 +146,12 @@ export class CrossKV {
   }
 
   /**
-   * Retrieves the first value associated with the given key (limit).
+   * Retrieves the first value associated with the given key, or null.
+   *
    * @param key - Representation of the key.
-   * @param limit - Optional maximum number of values to retrieve.
-   * @returns the retrieved value, or null
+   * @returns The retrieved value, or null if not found.
    */
-  public async get(key: KVKeyRepresentation): Promise<any | null> {
+  public async get(key: KVKeyRepresentation): Promise<KVDataEntry | null> {
     const result = await this.getMany(key, 1);
     if (result.length) {
       return result[0];
@@ -152,12 +161,16 @@ export class CrossKV {
   }
 
   /**
-   * Retrieves one or more values associated with the given key (limit).
+   * Retrieves all values associated with the given key, with an optional record limit.
+   *
    * @param key - Representation of the key.
    * @param limit - Optional maximum number of values to retrieve.
    * @returns An array of retrieved values.
    */
-  async getMany(key: KVKeyRepresentation, limit?: number): Promise<any[]> {
+  async getMany(
+    key: KVKeyRepresentation,
+    limit?: number,
+  ): Promise<KVDataEntry[]> {
     this.ensureOpen();
     const validatedKey = new KVKey(key, true);
     const offsets = this.index!.get(validatedKey)!;
@@ -195,18 +208,34 @@ export class CrossKV {
    * @param encodedData - The CBOR-encoded value to write.
    * @returns The offset at which the data was written.
    */
-  private async writeData(encodedData: Uint8Array): Promise<number> {
+  private async writeData(
+    pendingTransaction: KVPendingTransaction,
+  ): Promise<number> {
     this.ensureOpen();
+
+    // Create a data entry
+    const dataEntry: KVDataEntry = {
+      ts: pendingTransaction.ts,
+      data: pendingTransaction.data,
+    };
+
+    const encodedDataEntry = extEncoder.encode(dataEntry);
 
     // Get current offset (since we're appending)
     const stats = await stat(this.dataPath!); // Use fs.fstat instead
     const originalPosition = stats.size;
 
+    // Create array
+    const fullData = new Uint8Array(2 + encodedDataEntry.length);
+
     // Add length prefix (2 bytes)
-    const fullData = new Uint8Array(2 + encodedData.length);
-    new DataView(fullData.buffer).setUint16(0, encodedData.length, false);
-    fullData.set(encodedData, 2);
+    new DataView(fullData.buffer).setUint16(0, encodedDataEntry.length, false);
+
+    // Add data
+    fullData.set(encodedDataEntry, 2);
+
     await writeAtPosition(this.dataPath!, fullData, originalPosition);
+
     return originalPosition; // Return the offset (where the write started)
   }
 
@@ -247,15 +276,12 @@ export class CrossKV {
     // Ensure the key is ok
     const validatedKey = new KVKey(key);
 
-    // Encode data
-    const encodedData = extEncoder.encode(value);
-
     // Create transaction
     const pendingTransaction: KVPendingTransaction = {
       key: validatedKey,
       oper: overwrite ? KVOperation.UPSERT : KVOperation.INSERT,
       ts: new Date().getTime(),
-      data: encodedData,
+      data: value,
     };
 
     // Enqueue transaction
@@ -331,7 +357,7 @@ export class CrossKV {
     // 12. Write Data if Needed
     let offset;
     if (pendingTransaction.data !== undefined) {
-      offset = await this.writeData(pendingTransaction.data);
+      offset = await this.writeData(pendingTransaction);
     }
 
     // 3. Create the finished transaction

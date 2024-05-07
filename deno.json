@@ -1,6 +1,6 @@
 {
   "name": "@cross/kv",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "exports": {
     ".": "./mod.ts"
   },
@@ -13,7 +13,7 @@
     "cbor-x": "npm:cbor-x@^1.5.9"
   },
   "publish": {
-    "exclude": [".github", "*.test.ts", "*.bench.ts"]
+    "exclude": [".github", "**/*.test.ts", "**/*.bench.ts"]
   },
   "tasks": {
     "check": "deno fmt --check && deno lint && deno check mod.ts && deno doc --lint mod.ts && deno run -A mod.ts --slim --ignore-unused",

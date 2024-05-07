@@ -39,9 +39,9 @@ export class KVKey {
       }
 
       if (typeof element === "object") {
-        if (!element.from || !element.to) {
+        if (!(element.from || element.to)) {
           throw new TypeError(
-            'Ranges must have both "from" and "to" properties',
+            'Ranges must have one or both of "from" and "to"',
           );
         }
       }
