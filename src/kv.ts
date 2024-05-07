@@ -178,7 +178,6 @@ export class CrossKV {
     key: KVKeyRepresentation,
     limit?: number,
   ): Promise<KVDataEntry[]> {
-    this.ensureOpen();
     const validatedKey = new KVKey(key, true);
     const offsets = this.index!.get(validatedKey)!;
 
@@ -188,7 +187,6 @@ export class CrossKV {
     const results: any[] = [];
     let count = 0;
 
-    await lock(this.dataPath!);
     for (const offset of offsets) {
       count++;
       const lengthPrefixBuffer = await readAtPosition(
@@ -208,7 +206,6 @@ export class CrossKV {
       results.push(extDecoder.decode(dataBuffer));
       if (limit && count >= limit) return results;
     }
-    await unlock(this.dataPath!);
     return results;
   }
 

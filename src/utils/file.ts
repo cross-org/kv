@@ -1,6 +1,6 @@
 import { open, writeFile } from "node:fs/promises";
 import { CurrentRuntime, Runtime } from "@cross/runtime";
-import { cwd, isDir, isFile, mkdir, unlink } from "@cross/fs";
+import { cwd, isDir, isFile, mkdir, stat, unlink } from "@cross/fs";
 import { dirname, isAbsolute, join, resolve } from "@std/path";
 
 export async function writeAtPosition(
@@ -99,15 +99,30 @@ export async function lock(filename: string): Promise<boolean> {
     filePath = resolve(join(cwd(), filename));
   }
 
-  const lockFile = filePath + ".lock";
-  const maxRetries = 100; // Adjust as needed
+  const maxRetries = 50; // Adjust as needed
   const retryInterval = 100; // Wait 100ms between attempts
+  const staleTimeout = maxRetries * retryInterval + 10000;
+  const lockFile = filePath + ".lock";
+
+  // Remove stale lockfile
+  try {
+    const statResult = await stat(lockFile);
+    if (
+      statResult?.mtime &&
+      Date.now() - statResult.mtime.getTime() > staleTimeout
+    ) {
+      await unlink(lockFile);
+    }
+  } catch (_e) { /* Ignore */ }
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       // Attempt to create the lock file (will fail if it exists)
       if (CurrentRuntime === Runtime.Deno) {
-        const file = await Deno.open(lockFile, { create: true, write: true });
+        const file = await Deno.open(lockFile, {
+          createNew: true,
+          write: true,
+        });
         file.close();
       } else { // Runtime.Node
         await writeFile(lockFile, "", { flag: "wx" }); // 'wx' for exclusive creation
@@ -127,7 +142,7 @@ export async function lock(filename: string): Promise<boolean> {
   }
 
   // Could not acquire the lock after retries
-  return false;
+  throw new Error("Could not acquire database lock");
 }
 
 /**
