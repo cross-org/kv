@@ -1,6 +1,6 @@
 import { open, writeFile } from "node:fs/promises";
 import { CurrentRuntime, Runtime } from "@cross/runtime";
-import { cwd, isDir, isFile, mkdir } from "@cross/fs";
+import { cwd, isDir, isFile, mkdir, unlink } from "@cross/fs";
 import { dirname, isAbsolute, join, resolve } from "@std/path";
 
 export async function writeAtPosition(
@@ -83,4 +83,80 @@ export async function ensureFile(filename: string): Promise<boolean> {
     // Created
     return true;
   }
+}
+
+/**
+ * Locks a file
+ * @param filename The file to create if it doesnt already exist
+ * @returns True if created, False if it already existed
+ * @throws If the file can not be accessed or created
+ */
+export async function lock(filename: string): Promise<boolean> {
+  let filePath;
+  if (isAbsolute(filename)) {
+    filePath = resolve(filename);
+  } else {
+    filePath = resolve(join(cwd(), filename));
+  }
+
+  const lockFile = filePath + ".lock";
+  const maxRetries = 100; // Adjust as needed
+  const retryInterval = 100; // Wait 100ms between attempts
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // Attempt to create the lock file (will fail if it exists)
+      if (CurrentRuntime === Runtime.Deno) {
+        const file = await Deno.open(lockFile, { create: true, write: true });
+        file.close();
+      } else { // Runtime.Node
+        await writeFile(lockFile, "", { flag: "wx" }); // 'wx' for exclusive creation
+      }
+
+      // Lock acquired!
+      return true;
+    } catch (error) {
+      if (error.code === "EEXIST" || error.code === "EPERM") {
+        // File is locked, wait and retry
+        await new Promise((resolve) => setTimeout(resolve, retryInterval));
+      } else {
+        // Unexpected error, re-throw
+        throw error;
+      }
+    }
+  }
+
+  // Could not acquire the lock after retries
+  return false;
+}
+
+/**
+ * Unlocks a file
+ * @param filename The file to create if it doesnt already exist
+ * @returns True if unlocked, false if there was no lockfile
+ * @throws If the file can not be accessed or created
+ */
+export async function unlock(filename: string): Promise<boolean> {
+  let filePath;
+  if (isAbsolute(filename)) {
+    filePath = resolve(filename);
+  } else {
+    filePath = resolve(join(cwd(), filename));
+  }
+
+  const lockFile = filePath + ".lock";
+
+  try {
+    await unlink(lockFile);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return false;
+    } else {
+      // Unexpected error, re-throw
+      throw error;
+    }
+  }
+
+  // Could not acquire the lock after retries
+  return true;
 }

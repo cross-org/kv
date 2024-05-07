@@ -1,7 +1,13 @@
 // deno-lint-ignore-file no-explicit-any
 import { KVIndex } from "./index.ts";
 import { KVKey, type KVKeyRepresentation } from "./key.ts";
-import { ensureFile, readAtPosition, writeAtPosition } from "./utils/file.ts";
+import {
+  ensureFile,
+  lock,
+  readAtPosition,
+  unlock,
+  writeAtPosition,
+} from "./utils/file.ts";
 import { readFile, stat } from "@cross/fs";
 import {
   type KVFinishedTransaction,
@@ -102,9 +108,8 @@ export class CrossKV {
    */
   private async restoreTransactionLog() {
     this.ensureOpen();
-
+    await lock(this.transactionsPath!);
     const transactionLog = await readFile(this.transactionsPath!);
-
     let position = 0;
     while (position < transactionLog.byteLength) {
       const dataLength = new DataView(transactionLog.buffer).getUint16(
@@ -126,11 +131,13 @@ export class CrossKV {
             break;
         }
       } catch (_e) {
+        console.error(_e);
         throw new Error("Error while encoding data");
       }
 
       position += 2 + dataLength; // Move to the next transaction
     }
+    await unlock(this.transactionsPath!);
   }
 
   /**
@@ -181,6 +188,7 @@ export class CrossKV {
     const results: any[] = [];
     let count = 0;
 
+    await lock(this.dataPath!);
     for (const offset of offsets) {
       count++;
       const lengthPrefixBuffer = await readAtPosition(
@@ -200,6 +208,7 @@ export class CrossKV {
       results.push(extDecoder.decode(dataBuffer));
       if (limit && count >= limit) return results;
     }
+    await unlock(this.dataPath!);
     return results;
   }
 
@@ -222,6 +231,9 @@ export class CrossKV {
     const encodedDataEntry = extEncoder.encode(dataEntry);
 
     // Get current offset (since we're appending)
+
+    await lock(this.dataPath!);
+
     const stats = await stat(this.dataPath!); // Use fs.fstat instead
     const originalPosition = stats.size;
 
@@ -236,6 +248,8 @@ export class CrossKV {
 
     await writeAtPosition(this.dataPath!, fullData, originalPosition);
 
+    await unlock(this.dataPath!);
+
     return originalPosition; // Return the offset (where the write started)
   }
 
@@ -248,6 +262,7 @@ export class CrossKV {
     this.ensureOpen();
 
     // Get current offset (since we're appending)
+    await lock(this.transactionsPath!);
     const stats = await stat(this.transactionsPath!); // Use fs.fstat instead
     const originalPosition = stats.size;
 
@@ -256,6 +271,7 @@ export class CrossKV {
     new DataView(fullData.buffer).setUint16(0, encodedData.length);
     fullData.set(encodedData, 2);
     await writeAtPosition(this.transactionsPath!, fullData, originalPosition);
+    await unlock(this.transactionsPath!);
     return originalPosition; // Return the offset (where the write started)
   }
 

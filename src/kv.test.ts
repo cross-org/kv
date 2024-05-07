@@ -19,6 +19,28 @@ test("CrossKV: set, get and delete (numbers and strings)", async () => {
   assertEquals((await kvStore.get(["age"]))?.data, 30);
 });
 
+test("CrossKV: set, get and delete (big numbers)", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new CrossKV();
+  await kvStore.open(tempFilePrefix);
+  await kvStore.set(
+    ["num", 54645645646546345634523452345234545464],
+    54645645646546345634523452345234545464,
+  );
+
+  assertEquals(
+    (await kvStore.get(["num", 54645645646546345634523452345234545464]))?.data,
+    54645645646546345634523452345234545464,
+  );
+
+  const kvStore2 = new CrossKV();
+  await kvStore2.open(tempFilePrefix);
+  assertEquals(
+    (await kvStore2.get(["num", 54645645646546345634523452345234545464]))?.data,
+    54645645646546345634523452345234545464,
+  );
+});
+
 test("CrossKV: set, get and delete (objects)", async () => {
   const tempFilePrefix = await tempfile();
   const kvStore = new CrossKV();
