@@ -33,9 +33,9 @@ bunx jsr add @cross/kv
 ### **Simple Usage**
 
 ```typescript
-import { CrossKV } from "@cross/kv";
+import { KV } from "@cross/kv";
 
-const kvStore = new CrossKV();
+const kvStore = new KV();
 await kvStore.open("./mydatabase/"); // Path where data files will be stored
 
 // Set a value
@@ -55,10 +55,10 @@ await kvStore.close();
 ### **Advanced Usage**
 
 ```typescript
-import { CrossKV } from "@cross/kv";
+import { KV } from "@cross/kv";
 
 // Create an instance
-const kvStore = new CrossKV();
+const kvStore = new KV();
 
 // Open the database
 await kvStore.open("./mydatabase/");
@@ -109,7 +109,7 @@ await kvStore.close();
 
 ### **API Documentation**
 
-- `CrossKV` class
+- `KV` class
   - `open(filepath)`
   - `set(key, value, overwrite?)`
   - `get(key)`

@@ -5,6 +5,7 @@ import {
   ensureFile,
   lock,
   readAtPosition,
+  toAbsolutePath,
   unlock,
   writeAtPosition,
 } from "./utils/file.ts";
@@ -34,7 +35,7 @@ export interface KVDataEntry {
 /**
  * Cross-platform Key-Value store implementation backed by file storage.
  */
-export class CrossKV {
+export class KV {
   private index: KVIndex = new KVIndex();
 
   private pendingTransactions: KVPendingTransaction[] = [];
@@ -53,11 +54,11 @@ export class CrossKV {
    *                   Index and data files will be derived from this path.
    */
   public async open(filePath: string) {
-    const transactionsPath = filePath + ".tlog";
+    const transactionsPath = toAbsolutePath(filePath + ".tlog");
     await ensureFile(transactionsPath);
     this.transactionsPath = transactionsPath;
 
-    this.dataPath = filePath + ".data";
+    this.dataPath = toAbsolutePath(filePath + ".data");
     await ensureFile(this.dataPath);
 
     // Initial load of the transaction log into the index
@@ -110,6 +111,7 @@ export class CrossKV {
     this.ensureOpen();
     await lock(this.transactionsPath!);
     const transactionLog = await readFile(this.transactionsPath!);
+    await unlock(this.transactionsPath!);
     let position = 0;
     while (position < transactionLog.byteLength) {
       const dataLength = new DataView(transactionLog.buffer).getUint16(
@@ -137,7 +139,6 @@ export class CrossKV {
 
       position += 2 + dataLength; // Move to the next transaction
     }
-    await unlock(this.transactionsPath!);
   }
 
   /**
@@ -186,7 +187,8 @@ export class CrossKV {
     }
     const results: any[] = [];
     let count = 0;
-
+    // Add a setting to enable locks during reads
+    // await lock(this.dataPath!);
     for (const offset of offsets) {
       count++;
       const lengthPrefixBuffer = await readAtPosition(
@@ -204,8 +206,9 @@ export class CrossKV {
         offset + 2,
       );
       results.push(extDecoder.decode(dataBuffer));
-      if (limit && count >= limit) return results;
+      if (limit && count >= limit) break;
     }
+    //await unlock(this.dataPath!);
     return results;
   }
 
@@ -402,6 +405,6 @@ export class CrossKV {
   }
 
   public close() {
-    /* No-Op, for now */
+    /* No-op for now */
   }
 }

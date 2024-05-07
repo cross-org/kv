@@ -2,6 +2,21 @@ import { open, writeFile } from "node:fs/promises";
 import { CurrentRuntime, Runtime } from "@cross/runtime";
 import { cwd, isDir, isFile, mkdir, stat, unlink } from "@cross/fs";
 import { dirname, isAbsolute, join, resolve } from "@std/path";
+import {
+  LOCK_DEFAULT_INITIAL_RETRY_INTERVAL_MS,
+  LOCK_DEFAULT_MAX_RETRIES,
+  LOCK_STALE_TIMEOUT_S,
+} from "../constants.ts";
+
+export function toAbsolutePath(filename: string): string {
+  let filePath;
+  if (isAbsolute(filename)) {
+    filePath = resolve(filename);
+  } else {
+    filePath = resolve(join(cwd(), filename));
+  }
+  return filePath;
+}
 
 export async function writeAtPosition(
   filename: string,
@@ -54,14 +69,7 @@ export async function readAtPosition(
  * @returns True if created, False if it already existed
  * @throws If the file can not be accessed or created
  */
-export async function ensureFile(filename: string): Promise<boolean> {
-  // Resolve path
-  let filePath;
-  if (isAbsolute(filename)) {
-    filePath = resolve(filename);
-  } else {
-    filePath = resolve(join(cwd(), filename));
-  }
+export async function ensureFile(filePath: string): Promise<boolean> {
   const dirPath = dirname(filePath);
 
   // First ensure dir
@@ -70,15 +78,15 @@ export async function ensureFile(filename: string): Promise<boolean> {
   }
 
   // Then ensure file
-  if (await isFile(filename)) {
+  if (await isFile(filePath)) {
     // Existed since before
     return false;
   } else {
     if (CurrentRuntime === Runtime.Deno) {
-      const file = await Deno.create(filename);
+      const file = await Deno.create(filePath);
       file.close();
     } else { // Runtime.Node
-      await writeFile(filename, "");
+      await writeFile(filePath, "");
     }
     // Created
     return true;
@@ -91,17 +99,8 @@ export async function ensureFile(filename: string): Promise<boolean> {
  * @returns True if created, False if it already existed
  * @throws If the file can not be accessed or created
  */
-export async function lock(filename: string): Promise<boolean> {
-  let filePath;
-  if (isAbsolute(filename)) {
-    filePath = resolve(filename);
-  } else {
-    filePath = resolve(join(cwd(), filename));
-  }
-
-  const maxRetries = 50; // Adjust as needed
-  const retryInterval = 100; // Wait 100ms between attempts
-  const staleTimeout = maxRetries * retryInterval + 10000;
+export async function lock(filePath: string): Promise<boolean> {
+  const retryInterval = LOCK_DEFAULT_INITIAL_RETRY_INTERVAL_MS;
   const lockFile = filePath + ".lock";
 
   // Remove stale lockfile
@@ -109,13 +108,13 @@ export async function lock(filename: string): Promise<boolean> {
     const statResult = await stat(lockFile);
     if (
       statResult?.mtime &&
-      Date.now() - statResult.mtime.getTime() > staleTimeout
+      Date.now() - statResult.mtime.getTime() > LOCK_STALE_TIMEOUT_S
     ) {
       await unlink(lockFile);
     }
   } catch (_e) { /* Ignore */ }
 
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
+  for (let attempt = 0; attempt < LOCK_DEFAULT_MAX_RETRIES; attempt++) {
     try {
       // Attempt to create the lock file (will fail if it exists)
       if (CurrentRuntime === Runtime.Deno) {
@@ -133,7 +132,9 @@ export async function lock(filename: string): Promise<boolean> {
     } catch (error) {
       if (error.code === "EEXIST" || error.code === "EPERM") {
         // File is locked, wait and retry
-        await new Promise((resolve) => setTimeout(resolve, retryInterval));
+        await new Promise((resolve) =>
+          setTimeout(resolve, retryInterval + attempt * retryInterval)
+        );
       } else {
         // Unexpected error, re-throw
         throw error;
@@ -151,14 +152,7 @@ export async function lock(filename: string): Promise<boolean> {
  * @returns True if unlocked, false if there was no lockfile
  * @throws If the file can not be accessed or created
  */
-export async function unlock(filename: string): Promise<boolean> {
-  let filePath;
-  if (isAbsolute(filename)) {
-    filePath = resolve(filename);
-  } else {
-    filePath = resolve(join(cwd(), filename));
-  }
-
+export async function unlock(filePath: string): Promise<boolean> {
   const lockFile = filePath + ".lock";
 
   try {

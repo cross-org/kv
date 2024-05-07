@@ -1,12 +1,12 @@
 import { tempfile } from "@cross/fs";
-import { CrossKV } from "./kv.ts";
+import { KV } from "./kv.ts";
 
 const DATABASE_FILE_CROSS = await tempfile();
 const DATABASE_FILE_DENO = await tempfile();
 
 // Your setup and cleanup functions
-async function setupCrossKV() {
-  const kvStore = new CrossKV();
+async function setupKV() {
+  const kvStore = new KV();
   await kvStore.open(DATABASE_FILE_CROSS);
   return kvStore;
 }
@@ -21,7 +21,7 @@ async function setupDenoKV() {
   await crossStore.close();
 }*/
 
-const crossStore = await setupCrossKV();
+const crossStore = await setupKV();
 const denoStore = await setupDenoKV();
 let crossIter = 0;
 let denoIter = 0;

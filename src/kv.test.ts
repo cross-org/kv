@@ -1,11 +1,11 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { test } from "@cross/test";
-import { CrossKV } from "./kv.ts";
+import { KV } from "./kv.ts";
 import { tempfile } from "@cross/fs";
 
-test("CrossKV: set, get and delete (numbers and strings)", async () => {
+test("KV: set, get and delete (numbers and strings)", async () => {
   const tempFilePrefix = await tempfile();
-  const kvStore = new CrossKV();
+  const kvStore = new KV();
   await kvStore.open(tempFilePrefix);
   await kvStore.set(["name"], "Alice");
   await kvStore.set(["age"], 30);
@@ -19,9 +19,9 @@ test("CrossKV: set, get and delete (numbers and strings)", async () => {
   assertEquals((await kvStore.get(["age"]))?.data, 30);
 });
 
-test("CrossKV: set, get and delete (big numbers)", async () => {
+test("KV: set, get and delete (big numbers)", async () => {
   const tempFilePrefix = await tempfile();
-  const kvStore = new CrossKV();
+  const kvStore = new KV();
   await kvStore.open(tempFilePrefix);
   await kvStore.set(
     ["num", 54645645646546345634523452345234545464],
@@ -33,7 +33,7 @@ test("CrossKV: set, get and delete (big numbers)", async () => {
     54645645646546345634523452345234545464,
   );
 
-  const kvStore2 = new CrossKV();
+  const kvStore2 = new KV();
   await kvStore2.open(tempFilePrefix);
   assertEquals(
     (await kvStore2.get(["num", 54645645646546345634523452345234545464]))?.data,
@@ -41,9 +41,9 @@ test("CrossKV: set, get and delete (big numbers)", async () => {
   );
 });
 
-test("CrossKV: set, get and delete (objects)", async () => {
+test("KV: set, get and delete (objects)", async () => {
   const tempFilePrefix = await tempfile();
-  const kvStore = new CrossKV();
+  const kvStore = new KV();
   await kvStore.open(tempFilePrefix);
   await kvStore.set(["name"], { data: "Alice" });
   await kvStore.set(["age"], { data: 30 });
@@ -57,9 +57,9 @@ test("CrossKV: set, get and delete (objects)", async () => {
   assertEquals((await kvStore.get(["age"]))?.data, { data: 30 });
 });
 
-test("CrossKV: set, get and delete (dates)", async () => {
+test("KV: set, get and delete (dates)", async () => {
   const tempFilePrefix = await tempfile();
-  const kvStore = new CrossKV();
+  const kvStore = new KV();
   await kvStore.open(tempFilePrefix);
   const date = new Date();
   await kvStore.set(["pointintime"], date);
@@ -75,9 +75,9 @@ test("CrossKV: set, get and delete (dates)", async () => {
   assertEquals(await kvStore.get(["pointintime"]), null);
 });
 
-test("CrossKV: throws on duplicate key insertion", async () => {
+test("KV: throws on duplicate key insertion", async () => {
   const tempFilePrefix = await tempfile();
-  const kvStore = new CrossKV();
+  const kvStore = new KV();
   await kvStore.open(tempFilePrefix);
 
   await kvStore.set(["name"], "Alice");
@@ -89,9 +89,9 @@ test("CrossKV: throws on duplicate key insertion", async () => {
   );
 });
 
-test("CrossKV: throws when trying to delete a non-existing key", async () => {
+test("KV: throws when trying to delete a non-existing key", async () => {
   const tempFilePrefix = await tempfile();
-  const kvStore = new CrossKV();
+  const kvStore = new KV();
   await kvStore.open(tempFilePrefix);
 
   await assertRejects(
@@ -100,9 +100,9 @@ test("CrossKV: throws when trying to delete a non-existing key", async () => {
   ); // We don't have a specific error type for this yet
 });
 
-test("CrossKV: supports multi-level nested keys", async () => {
+test("KV: supports multi-level nested keys", async () => {
   const tempFilePrefix = await tempfile();
-  const kvStore = new CrossKV();
+  const kvStore = new KV();
   await kvStore.open(tempFilePrefix);
 
   await kvStore.set(["data", "user", "name"], "Alice");
@@ -112,9 +112,9 @@ test("CrossKV: supports multi-level nested keys", async () => {
   assertEquals((await kvStore.get(["data", "system", "version"]))?.data, 1.2);
 });
 
-test("CrossKV: supports multi-level nested keys with numbers", async () => {
+test("KV: supports multi-level nested keys with numbers", async () => {
   const tempFilePrefix = await tempfile();
-  const kvStore = new CrossKV();
+  const kvStore = new KV();
   await kvStore.open(tempFilePrefix);
 
   await kvStore.set(["data", "user", 4], "Alice");
@@ -125,9 +125,9 @@ test("CrossKV: supports multi-level nested keys with numbers", async () => {
   assertEquals(await kvStore.get(["data", "system", 5]), null);
 });
 
-test("CrossKV: supports numeric key ranges", async () => {
+test("KV: supports numeric key ranges", async () => {
   const tempFilePrefix = await tempfile();
-  const kvStore = new CrossKV();
+  const kvStore = new KV();
   await kvStore.open(tempFilePrefix);
 
   // Set some values within a range
@@ -143,9 +143,9 @@ test("CrossKV: supports numeric key ranges", async () => {
   assertEquals(rangeResults[2].data, "Value 9");
 });
 
-test("CrossKV: supports string key ranges", async () => {
+test("KV: supports string key ranges", async () => {
   const tempFilePrefix = await tempfile();
-  const kvStore = new CrossKV();
+  const kvStore = new KV();
   await kvStore.open(tempFilePrefix);
 
   // Set some values with string keys
