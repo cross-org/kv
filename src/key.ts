@@ -1,4 +1,4 @@
-export const KV_KEY_ALLOWED_CHARS = /^[a-zA-Z0-9\-_]+$/;
+export const KV_KEY_ALLOWED_CHARS = /^[a-zA-Z0-9\-_@]+$/;
 
 export interface KVKeyRange {
   from?: string | number;
@@ -39,9 +39,18 @@ export class KVKey {
       }
 
       if (typeof element === "object") {
-        if (!(element.from || element.to)) {
+        const allowedKeys = ["from", "to"];
+        const elementKeys = Object.keys(element);
+
+        // Check for empty object
+        if (elementKeys.length === 0) {
+          return; // Allow an empty object
+        }
+
+        // Check for additional keys
+        if (!elementKeys.every((key) => allowedKeys.includes(key))) {
           throw new TypeError(
-            'Ranges must have one or both of "from" and "to"',
+            'Ranges must have only "from" and/or "to" keys',
           );
         }
       }

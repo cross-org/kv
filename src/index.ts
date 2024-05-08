@@ -117,17 +117,21 @@ export class KVIndex {
           recurse(childNode, keyIndex + 1);
         }
       } else if (
-        typeof keyPart === "object" &&
-        (keyPart.from !== undefined || keyPart.to !== undefined)
+        typeof keyPart === "object"
       ) {
-        // Key range
         const range = keyPart as KVKeyRange;
+
+        // Key range
         for (const [index, childNode] of node.children.entries()) {
           // Iterate over children, comparing the index to the range
           if (
+            // Shortcut for empty key = all
+            (range.from === undefined && range.to === undefined) ||
+            // String comparison
             (typeof index === "string" &&
               (range.from === undefined || index >= (range.from as string)) &&
               (range.to === undefined || index <= (range.to as string))) ||
+            // Number comparison
             (typeof index === "number" &&
               (range.from === undefined || index >= (range.from as number)) &&
               (range.to === undefined || index <= (range.to as number)))
