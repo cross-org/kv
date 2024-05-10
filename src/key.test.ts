@@ -33,7 +33,7 @@ test("KVKey: returns correct string representation", () => {
   assertEquals(key.getKeyRepresentation(), "users.data.user123");
 });
 
-test("KVKey: constructs with valid range", async () => {
+test("KVKey: constructs with valid range", () => {
   const key = new KVKey(["users", { from: "user001", to: "user999" }], true);
   assertEquals(key.get(), ["users", { from: "user001", to: "user999" }]);
 });

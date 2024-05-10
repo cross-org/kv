@@ -1,4 +1,4 @@
-import { open, writeFile } from "node:fs/promises";
+import { type FileHandle, open, writeFile } from "node:fs/promises";
 import { CurrentRuntime, Runtime } from "@cross/runtime";
 import { cwd, isDir, isFile, mkdir, stat, unlink } from "@cross/fs";
 import { dirname, isAbsolute, join, resolve } from "@std/path";
@@ -19,77 +19,52 @@ export function toAbsolutePath(filename: string): string {
 }
 
 export async function writeAtPosition(
-  filename: string,
+  fd: Deno.FsFile | FileHandle,
   data: Uint8Array,
   position: number,
 ) {
   // Deno
   if (CurrentRuntime === Runtime.Deno) {
-    const file = await Deno.open(filename, { read: true, write: true });
-    await file.seek(position, Deno.SeekMode.Start);
-    await file.write(data);
-    file.close();
+    await (fd as Deno.FsFile).seek(position, Deno.SeekMode.Start);
+    await fd.write(data);
 
     // Node or Bun
   } else if (CurrentRuntime) { // Node or Bun
-    const fd = await open(filename, "r+");
     await fd.write(data, 0, data.length, position);
-    await fd.close();
+  }
+}
+
+export async function rawOpen(
+  filename: string,
+  write: boolean = true,
+): Promise<Deno.FsFile | FileHandle> {
+  // Deno
+  if (CurrentRuntime === Runtime.Deno) {
+    return await Deno.open(filename, { read: true, write: write });
+  } else {
+    const mode = write ? "r+" : "r";
+    return await open(filename, mode);
   }
 }
 
 export async function readAtPosition(
-  filename: string,
+  fd: Deno.FsFile | FileHandle,
   length: number,
   position: number,
 ): Promise<Uint8Array> {
   // Deno
   if (CurrentRuntime === Runtime.Deno) {
-    const file = await Deno.open(filename, { read: true });
-    await file.seek(position, Deno.SeekMode.Start);
+    await (fd as Deno.FsFile).seek(position, Deno.SeekMode.Start);
     const buffer = new Uint8Array(length);
-    await file.read(buffer);
-    file.close();
+    await fd.read(buffer);
     return buffer;
 
     // Node or Bun
   } else {
-    const fd = await open(filename, "r");
     // @ts-ignore cross-runtime
     const buffer = Buffer.alloc(length);
     await fd.read(buffer, 0, length, position);
-    await fd.close();
     return buffer;
-  }
-}
-
-/**
- * Creates a file if it doesn't already exist
- * @param filename The file to create if it doesnt already exist
- * @returns True if created, False if it already existed
- * @throws If the file can not be accessed or created
- */
-export async function ensureFile(filePath: string): Promise<boolean> {
-  const dirPath = dirname(filePath);
-
-  // First ensure dir
-  if (!await isDir(filePath)) {
-    await mkdir(dirPath, { recursive: true });
-  }
-
-  // Then ensure file
-  if (await isFile(filePath)) {
-    // Existed since before
-    return false;
-  } else {
-    if (CurrentRuntime === Runtime.Deno) {
-      const file = await Deno.create(filePath);
-      file.close();
-    } else { // Runtime.Node
-      await writeFile(filePath, "");
-    }
-    // Created
-    return true;
   }
 }
 
@@ -112,7 +87,7 @@ export async function lock(filePath: string): Promise<boolean> {
     ) {
       await unlink(lockFile);
     }
-  } catch (_e) { /* Ignore */ }
+  } catch (_e) { /* */ }
 
   for (let attempt = 0; attempt < LOCK_DEFAULT_MAX_RETRIES; attempt++) {
     try {
@@ -168,4 +143,36 @@ export async function unlock(filePath: string): Promise<boolean> {
 
   // Could not acquire the lock after retries
   return true;
+}
+
+/**
+ * Creates a file if it doesn't already exist
+ * @param filename The file to create if it doesnt already exist
+ * @returns True if created, False if it already existed
+ * @throws If the file can not be accessed or created
+ */
+export async function ensureFile(filePath: string): Promise<boolean> {
+  const dirPath = dirname(filePath);
+
+  // First ensure dir
+  if (!await isDir(dirPath)) {
+    await mkdir(dirPath, { recursive: true });
+  }
+
+  // Then ensure file
+  if (await isFile(filePath)) {
+    // Existed since before
+    return true;
+  } else {
+    // Create new file
+    if (CurrentRuntime === Runtime.Deno) {
+      const file = await Deno.create(filePath);
+      file.close();
+    } else { // Runtime.Node
+      await writeFile(filePath, "");
+    }
+
+    // Created
+    return false;
+  }
 }

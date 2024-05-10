@@ -1,5 +1,4 @@
 import type { KVKey, KVKeyRange } from "./key.ts";
-import { type KVFinishedTransaction, KVOperation } from "./transaction.ts";
 
 /**
  * Represents content of a node within the KVIndex tree.
@@ -34,14 +33,11 @@ export class KVIndex {
 
   /**
    * Adds an entry to the index.
-   * @param transaction - The transaction to add
    * @throws {Error} If 'overwrite' is false and a duplicate key is found.
    */
-  add(transaction: KVFinishedTransaction) {
+  add(key: KVKey, offset: number) {
     let current = this.index;
-    let lastPart;
-    for (const part of transaction.key.get()) {
-      lastPart = part;
+    for (const part of key.get()) {
       const currentPart = current.children?.get(part as string | number);
       if (currentPart) {
         current = currentPart;
@@ -53,13 +49,7 @@ export class KVIndex {
         current = newObj;
       }
     }
-    if (current!.reference === undefined) {
-      current!.reference = transaction.offset;
-    } else if (transaction.oper === KVOperation.UPSERT) {
-      current!.reference = transaction.offset;
-    } else {
-      throw new Error(`Duplicate key: ${lastPart}`);
-    }
+    current!.reference = offset;
   }
 
   /**
@@ -67,9 +57,9 @@ export class KVIndex {
    * @param transaction - The transaction to remove.
    * @returns The removed data row reference, or undefined if the key was not found.
    */
-  delete(transaction: KVFinishedTransaction): number | undefined {
+  delete(key: KVKey): number | undefined {
     let current = this.index;
-    for (const part of transaction.key.get()) {
+    for (const part of key.get()) {
       const currentPart = current.children.get(part as (string | number));
       if (!currentPart || !currentPart.children) { // Key path not found
         return undefined;

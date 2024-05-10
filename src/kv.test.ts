@@ -17,6 +17,8 @@ test("KV: set, get and delete (numbers and strings)", async () => {
 
   assertEquals(await kvStore.get(["name"]), null);
   assertEquals((await kvStore.get(["age"]))?.data, 30);
+
+  await kvStore.close();
 });
 
 test("KV: set, get and delete (big numbers)", async () => {
@@ -33,12 +35,16 @@ test("KV: set, get and delete (big numbers)", async () => {
     54645645646546345634523452345234545464,
   );
 
+  kvStore.close();
+
   const kvStore2 = new KV();
   await kvStore2.open(tempFilePrefix);
   assertEquals(
     (await kvStore2.get(["num", 54645645646546345634523452345234545464]))?.data,
     54645645646546345634523452345234545464,
   );
+
+  kvStore2.close();
 });
 
 test("KV: set, get and delete (objects)", async () => {
@@ -55,6 +61,8 @@ test("KV: set, get and delete (objects)", async () => {
 
   assertEquals(await kvStore.get(["name"]), null);
   assertEquals((await kvStore.get(["age"]))?.data, { data: 30 });
+
+  await kvStore.close();
 });
 
 test("KV: set, get and delete (dates)", async () => {
@@ -73,20 +81,8 @@ test("KV: set, get and delete (dates)", async () => {
   );
   await kvStore.delete(["pointintime"]);
   assertEquals(await kvStore.get(["pointintime"]), null);
-});
 
-test("KV: throws on duplicate key insertion", async () => {
-  const tempFilePrefix = await tempfile();
-  const kvStore = new KV();
-  await kvStore.open(tempFilePrefix);
-
-  await kvStore.set(["name"], "Alice");
-
-  assertRejects(
-    async () => await kvStore.set(["name"], "Bob"),
-    Error,
-    "Duplicate key: Key already exists",
-  );
+  await kvStore.close();
 });
 
 test("KV: throws when trying to delete a non-existing key", async () => {
@@ -98,6 +94,8 @@ test("KV: throws when trying to delete a non-existing key", async () => {
     async () => await kvStore.delete(["unknownKey"]),
     Error,
   ); // We don't have a specific error type for this yet
+
+  await kvStore.close();
 });
 
 test("KV: supports multi-level nested keys", async () => {
@@ -110,6 +108,8 @@ test("KV: supports multi-level nested keys", async () => {
 
   assertEquals((await kvStore.get(["data", "user", "name"]))?.data, "Alice");
   assertEquals((await kvStore.get(["data", "system", "version"]))?.data, 1.2);
+
+  await kvStore.close();
 });
 
 test("KV: supports multi-level nested keys with numbers", async () => {
@@ -123,6 +123,8 @@ test("KV: supports multi-level nested keys with numbers", async () => {
   assertEquals((await kvStore.get(["data", "user", 4]))?.data, "Alice");
   assertEquals((await kvStore.get(["data", "system", 4]))?.data, 1.2);
   assertEquals(await kvStore.get(["data", "system", 5]), null);
+
+  await kvStore.close();
 });
 
 test("KV: supports numeric key ranges", async () => {
@@ -141,6 +143,8 @@ test("KV: supports numeric key ranges", async () => {
   assertEquals(rangeResults[0].data, "Value 7");
   assertEquals(rangeResults[1].data, "Value 8");
   assertEquals(rangeResults[2].data, "Value 9");
+
+  await kvStore.close();
 });
 
 test("KV: supports additional levels after numeric key ranges", async () => {
@@ -164,6 +168,8 @@ test("KV: supports additional levels after numeric key ranges", async () => {
   assertEquals(rangeResults[0].data, "Value 7 in doc1");
   assertEquals(rangeResults[1].data, "Value 8 in doc1");
   assertEquals(rangeResults[2].data, "Value 9 in doc1");
+
+  await kvStore.close();
 });
 
 test("KV: supports empty numeric key ranges to get all", async () => {
@@ -186,6 +192,8 @@ test("KV: supports empty numeric key ranges to get all", async () => {
   assertEquals(rangeResults3.length, 12);
   const rangeResults4 = await kvStore.getMany(["data"]);
   assertEquals(rangeResults4.length, 12);
+
+  await kvStore.close();
 });
 
 test("KV: supports string key ranges", async () => {
@@ -205,4 +213,6 @@ test("KV: supports string key ranges", async () => {
   }]);
   assertEquals(rangeResults.length, 2);
   assertEquals(rangeResults[0].data, "Document A");
+
+  await kvStore.close();
 });

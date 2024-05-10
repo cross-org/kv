@@ -111,12 +111,13 @@ await kvStore.close();
 
 - `KV` class
   - `open(filepath)`
-  - `set(key, value, overwrite?)`
+  - `set(key, value)`
   - `get(key)`
   - `getMany(key)`
   - `delete(key)`
   - `beginTransaction()`
   - `endTransaction()`
+  - `vacuum()`
   - `close()`
 - `KVKey` class (Detail the constructor and methods)
 - `KVKeyRange` interface
