@@ -199,7 +199,7 @@ export class KV {
     const validatedKey = new KVKey(key);
 
     const transaction = new KVTransaction();
-    transaction.create(
+    await transaction.create(
       validatedKey,
       KVOperation.SET,
       Date.now(),
@@ -227,7 +227,6 @@ export class KV {
     const validatedKey = new KVKey(key);
 
     // Create transaction
-
     const pendingTransaction = new KVTransaction();
     pendingTransaction.create(
       validatedKey,

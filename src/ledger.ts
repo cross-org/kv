@@ -243,7 +243,6 @@ export class KVLedger {
           offset + 8 + headerLength,
         );
         await transaction.dataFromUint8Array(transactionHeaderData);
-
         // Validate data
         if (!compareHash(originalHash, transaction.hash!)) {
           throw new Error("Invalid data");

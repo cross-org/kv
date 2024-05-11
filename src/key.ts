@@ -11,8 +11,9 @@ export class KVKey {
   constructor(
     private key: KVKeyRepresentation,
     allowRange: boolean = false,
+    validate: boolean = true,
   ) {
-    this.validateKey(allowRange);
+    if (validate) this.validateKey(allowRange);
     this.key = key;
   }
 
