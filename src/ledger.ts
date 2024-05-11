@@ -10,6 +10,7 @@ import { SUPPORTED_LEDGER_VERSIONS } from "./constants.ts";
 import { KVOperation, KVTransaction } from "./transaction.ts";
 import type { KVKey } from "./key.ts";
 import { rename, unlink } from "@cross/fs";
+import { compareHash } from "./utils/hash.ts";
 
 export interface KVTransactionMeta {
   key: KVKey;
@@ -235,12 +236,18 @@ export class KVLedger {
 
       // Read transaction data (optional)
       if (decodeData) {
+        const originalHash: Uint8Array = transaction.hash!;
         const transactionHeaderData = await readAtPosition(
           fd,
           dataLength,
           offset + 8 + headerLength,
         );
-        transaction.dataFromUint8Array(transactionHeaderData);
+        await transaction.dataFromUint8Array(transactionHeaderData);
+
+        // Validate data
+        if (!compareHash(originalHash, transaction.hash!)) {
+          throw new Error("Invalid data");
+        }
       }
       return {
         offset: offset,

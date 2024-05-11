@@ -1,3 +1,4 @@
+import { sha1 } from "./utils/hash.ts";
 import { extDecoder, extEncoder } from "./cbor.ts";
 import { KVKey, type KVKeyRepresentation } from "./key.ts";
 
@@ -24,6 +25,11 @@ export interface KVTransactionHeader {
    * Operation timestamp
    */
   t: number;
+
+  /**
+   * Hash
+   */
+  h: Uint8Array;
 }
 
 export type KVTransactionData = Uint8Array;
@@ -33,12 +39,13 @@ export class KVTransaction {
   public key?: KVKey;
   public operation?: KVOperation;
   public timestamp?: number;
-  public value?: unknown;
+  public data?: Uint8Array;
+  public hash?: Uint8Array;
 
   constructor() {
   }
 
-  public create(
+  public async create(
     key: KVKey | KVKeyRepresentation,
     operation: KVOperation,
     timestamp: number,
@@ -51,7 +58,8 @@ export class KVTransaction {
     }
     this.operation = operation;
     this.timestamp = timestamp;
-    this.value = value;
+    this.data = value ? extEncoder.encode(value) : undefined;
+    this.hash = this.data ? await sha1(this.data) : undefined;
   }
 
   public headerFromUint8Array(data: Uint8Array) {
@@ -61,10 +69,14 @@ export class KVTransaction {
     this.key = decoded.k;
     this.operation = decoded.o;
     this.timestamp = decoded.t;
+    this.hash = decoded.h;
   }
 
-  public dataFromUint8Array(data: Uint8Array) {
-    this.value = extDecoder.decode(data);
+  public async dataFromUint8Array(data: Uint8Array) {
+    this.data = extDecoder.decode(data);
+    if (data) {
+      this.hash = await sha1(data);
+    }
   }
 
   /**
@@ -76,6 +88,7 @@ export class KVTransaction {
       k: this.key!,
       o: this.operation!,
       t: this.timestamp!,
+      h: this.hash!,
     };
 
     // Encode header
@@ -84,9 +97,7 @@ export class KVTransaction {
     );
 
     // Encode data
-    const pendingTransactionData = this.value
-      ? extEncoder.encode(this.value)
-      : undefined;
+    const pendingTransactionData = this.data;
     const pendingTransactionDataLength = pendingTransactionData
       ? pendingTransactionData.length
       : 0;

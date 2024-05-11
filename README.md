@@ -93,12 +93,12 @@ await kvStore.set(["users", "by_id", 5], {
 // Use the index to select users between 2 and 4
 console.log(
   "Users 2-4:",
-  await kvStore.getMany(["users", "by_id", { from: 2, to: 4 }]),
+  await kvStore.list(["users", "by_id", { from: 2, to: 4 }]),
 );
 // ... will output the objects of Alice, Ben and Lisa
 
 // Use a plain JavaScript filter (less performant) to find a user named ben
-const ben = (await kvStore.getMany(["users"])).filter((user) =>
+const ben = (await kvStore.list(["users"])).filter((user) =>
   user.name === "Ben"
 );
 console.log("Ben: ", ben); // Outputs the object of Ben
@@ -113,7 +113,7 @@ await kvStore.close();
   - `open(filepath)`
   - `set(key, value)`
   - `get(key)`
-  - `getMany(key)`
+  - `list(key)`
   - `delete(key)`
   - `beginTransaction()`
   - `endTransaction()`

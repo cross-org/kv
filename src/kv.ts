@@ -141,7 +141,7 @@ export class KV {
    * @returns The retrieved value, or null if not found.
    */
   public async get(key: KVKeyRepresentation): Promise<KVDataEntry | null> {
-    const result = await this.getMany(key, 1);
+    const result = await this.list(key, 1);
     if (result.length) {
       return result[0];
     } else {
@@ -156,7 +156,7 @@ export class KV {
    * @param limit - Optional maximum number of values to retrieve.
    * @returns An array of retrieved values.
    */
-  async getMany(
+  async list(
     key: KVKeyRepresentation,
     limit?: number,
   ): Promise<KVDataEntry[]> {
@@ -173,7 +173,7 @@ export class KV {
       if (result?.transaction) {
         results.push({
           ts: result?.transaction.timestamp,
-          data: result?.transaction.value,
+          data: result?.transaction.data,
         });
         count++;
       }

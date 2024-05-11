@@ -138,7 +138,7 @@ test("KV: supports numeric key ranges", async () => {
   }
 
   // Test if the 'get' function returns the expected values
-  const rangeResults = await kvStore.getMany(["data", { from: 7, to: 9 }]);
+  const rangeResults = await kvStore.list(["data", { from: 7, to: 9 }]);
   assertEquals(rangeResults.length, 3);
   assertEquals(rangeResults[0].data, "Value 7");
   assertEquals(rangeResults[1].data, "Value 8");
@@ -159,7 +159,7 @@ test("KV: supports additional levels after numeric key ranges", async () => {
   }
 
   // Test if the 'get' function returns the expected values
-  const rangeResults = await kvStore.getMany([
+  const rangeResults = await kvStore.list([
     "data",
     { from: 7, to: 9 },
     "doc1",
@@ -184,13 +184,13 @@ test("KV: supports empty numeric key ranges to get all", async () => {
   }
 
   // Test if the 'get' function returns the expected values
-  const rangeResults = await kvStore.getMany(["data", {}, "doc1"]);
+  const rangeResults = await kvStore.list(["data", {}, "doc1"]);
   assertEquals(rangeResults.length, 6);
-  const rangeResults2 = await kvStore.getMany(["data", {}, "doc2"]);
+  const rangeResults2 = await kvStore.list(["data", {}, "doc2"]);
   assertEquals(rangeResults2.length, 6);
-  const rangeResults3 = await kvStore.getMany(["data", {}]);
+  const rangeResults3 = await kvStore.list(["data", {}]);
   assertEquals(rangeResults3.length, 12);
-  const rangeResults4 = await kvStore.getMany(["data"]);
+  const rangeResults4 = await kvStore.list(["data"]);
   assertEquals(rangeResults4.length, 12);
 
   await kvStore.close();
@@ -207,7 +207,7 @@ test("KV: supports string key ranges", async () => {
   await kvStore.set(["files", "image_1"], "Image 1");
 
   // Get all values within the "doc_" range
-  const rangeResults = await kvStore.getMany(["files", {
+  const rangeResults = await kvStore.list(["files", {
     from: "doc_",
     to: "doc_z",
   }]);
