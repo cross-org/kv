@@ -69,7 +69,6 @@ export class KVIndex {
 
     // If we reach here, we've found the leaf node
     const oldReference = current.reference;
-    current.reference = undefined;
     delete current.reference;
 
     // No need to cleanup as leftover nodes will be lost at next rebuild
@@ -84,9 +83,10 @@ export class KVIndex {
    */
   get(key: KVKey): number[] {
     const resultSet: number[] = [];
+    const keyLength = key.get().length;
 
     function recurse(node: KVIndexContent, keyIndex: number): void {
-      if (keyIndex >= key.get().length) {
+      if (keyIndex >= keyLength) {
         // We've reached the end of the key
         if (node.reference !== undefined) {
           resultSet.push(node.reference);

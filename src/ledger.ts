@@ -216,11 +216,14 @@ export class KVLedger {
     try {
       fd = await rawOpen(this.dataPath, false);
       const transactionLengthData = await readAtPosition(fd, 8, offset);
-      const headerLength = new DataView(transactionLengthData.buffer).getUint32(
+      const transactionLengthDataView = new DataView(
+        transactionLengthData.buffer,
+      );
+      const headerLength = transactionLengthDataView.getUint32(
         0,
         false,
       );
-      const dataLength = new DataView(transactionLengthData.buffer).getUint32(
+      const dataLength = transactionLengthDataView.getUint32(
         4,
         false,
       );

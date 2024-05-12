@@ -169,7 +169,7 @@ export class KV {
     const results: any[] = [];
     let count = 0;
     for (const offset of offsets) {
-      const result = await this.ledger?.rawGetTransaction(offset);
+      const result = await this.ledger?.rawGetTransaction(offset, false);
       if (result?.transaction) {
         results.push({
           ts: result?.transaction.timestamp,

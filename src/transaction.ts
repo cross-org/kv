@@ -1,6 +1,6 @@
 import { sha1 } from "./utils/hash.ts";
-import { extDecoder, extEncoder } from "./cbor.ts";
 import { KVKey, type KVKeyRepresentation } from "./key.ts";
+import { decode, encode } from "cbor-x";
 
 export enum KVOperation {
   SET = 1,
@@ -58,11 +58,12 @@ export class KVTransaction {
     }
     this.operation = operation;
     this.timestamp = timestamp;
-    this.data = value ? extEncoder.encode(value) : undefined;
+    this.data = value ? encode(value) : undefined;
     this.hash = this.data ? await sha1(this.data) : undefined;
   }
 
   public headerFromUint8Array(data: Uint8Array) {
+    const dataView = new DataView(data.buffer);
     let offset = 0;
 
     // 1. Decode Number of Key Elements (uint32)
@@ -71,7 +72,7 @@ export class KVTransaction {
         "Invalid data: Not enough bytes to decode key elements count",
       );
     }
-    const numKeyElements = new DataView(data.buffer).getUint32(offset, false);
+    const numKeyElements = dataView.getUint32(offset, false);
     offset += 4;
 
     const keyToBe: KVKeyRepresentation = [];
@@ -91,7 +92,7 @@ export class KVTransaction {
             "Invalid data: Not enough bytes to decode string length",
           );
         }
-        const strLength = new DataView(data.buffer).getUint32(offset, false);
+        const strLength = dataView.getUint32(offset, false);
         offset += 4;
 
         // 3b. Decode String Bytes
@@ -106,7 +107,7 @@ export class KVTransaction {
         if (offset + 8 > data.length) {
           throw new Error("Invalid data: Not enough bytes to decode number");
         }
-        const numValue = new DataView(data.buffer).getFloat64(offset, false);
+        const numValue = dataView.getFloat64(offset, false);
         keyToBe.push(numValue);
         offset += 8;
       } else {
@@ -128,14 +129,14 @@ export class KVTransaction {
     if (offset + 4 > data.length) {
       throw new Error("Invalid data: Not enough bytes to decode timestamp");
     }
-    this.timestamp = new DataView(data.buffer).getUint32(offset, false);
+    this.timestamp = dataView.getUint32(offset, false);
     offset += 4;
 
     // Decode hash length (assuming it's encoded as uint32)
     if (offset + 4 > data.length) {
       throw new Error("Invalid data: Not enough bytes to decode hash length");
     }
-    const hashLength = new DataView(data.buffer).getUint32(offset, false);
+    const hashLength = dataView.getUint32(offset, false);
     offset += 4;
 
     // Decode hash bytes
@@ -146,7 +147,7 @@ export class KVTransaction {
   }
 
   public async dataFromUint8Array(data: Uint8Array) {
-    this.data = extDecoder.decode(data);
+    this.data = decode(data);
     if (data) {
       this.hash = await sha1(data);
     }
@@ -157,16 +158,6 @@ export class KVTransaction {
    */
   public toUint8Array(): Uint8Array {
     const keyBytesArray = [];
-
-    // 1. Encode Number of Key Elements (uint32)
-    const numKeyElements = this.key!.get().length;
-    const numKeyElementsBytes = new Uint8Array(4);
-    new DataView(numKeyElementsBytes.buffer).setUint32(
-      0,
-      numKeyElements,
-      false,
-    );
-    keyBytesArray.push(numKeyElementsBytes);
 
     for (const element of this.key!.get()) {
       if (typeof element === "string") {
@@ -206,13 +197,19 @@ export class KVTransaction {
     const hashBytes = this.hash!;
 
     // Calculate total size of the encoded header
-    const totalSize = keyBytes.length + // Key length + key bytes
+    const totalSize = 4 + // Number of key elements
+      keyBytes.length + // Key bytes
       1 + // Operation
       4 + // Timestamp
       4 + (hashBytes ? hashBytes.length : 0); // Hash length + hash bytes
 
     const headerBytes = new Uint8Array(totalSize);
+    const headerBytesView = new DataView(headerBytes.buffer);
     let offset = 0;
+
+    // 1. Encode Number of Key Elements (uint32)
+    headerBytesView.setUint32(0, this.key!.get().length, false);
+    offset += 4;
 
     // Encode key bytes
     headerBytes.set(keyBytes, offset);
@@ -223,11 +220,11 @@ export class KVTransaction {
     offset += 1;
 
     // Encode timestamp
-    new DataView(headerBytes.buffer).setUint32(offset, this.timestamp!, false);
+    headerBytesView.setUint32(offset, this.timestamp!, false);
     offset += 4;
 
     // Encode hash length
-    new DataView(headerBytes.buffer).setUint32(
+    headerBytesView.setUint32(
       offset,
       hashBytes ? hashBytes.length : 0,
       false,
@@ -243,20 +240,21 @@ export class KVTransaction {
       ? pendingTransactionData.length
       : 0;
 
-    // Create array
+    // Create typed array and view
     const fullData = new Uint8Array(
       4 + 4 + headerBytes.length + pendingTransactionDataLength,
     );
+    const fullDataView = new DataView(fullData.buffer);
 
     // Add header length
-    new DataView(fullData.buffer).setUint32(
+    fullDataView.setUint32(
       0,
       headerBytes.length,
       false,
     );
 
     // Add data length
-    new DataView(fullData.buffer).setUint32(
+    fullDataView.setUint32(
       4,
       pendingTransactionDataLength,
       false,
