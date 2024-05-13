@@ -1,21 +1,30 @@
-**cross/kv**
+# cross/kv: A Fast Key/Value Database for Node, Deno and Bun.
 
-A cross-platform, hierarchical Key/Value database for JavaScript and TypeScript,
-designed to work in all major runtimes (Node.js, Deno, and Bun).
+A cross-platform, in-memory indexed and file based Key/Value database for
+JavaScript and TypeScript, designed for seamless multi-process access and
+compatibility across Node.js, Deno, and Bun.
 
-### **Features**
+_Please note that `cross/kv` is still under development. The API and features
+are starting to stabilize, but are still subject to change._
 
-- **Simple Key/Value Storage:** Store and retrieve data easily using
-  hierarchical keys.
+## **Features**
+
+- **Indexed Key/Value Storage**: Store and retrieve data easily using
+  hierarchical keys, with an in-memory index to provide fast lookups of large
+  datasets.
+- **Transaction-Based Storage:** Uses a single append-only transaction ledger to
+  store data, ensuring durability and recoverability.
+- **Vacuuming:** Supports vacuuming the ledger to reclaim disk space used by
+  deletion transactions and deleted documents.
+- **Multi-Process Support**: Multiple processes can safely access and modify the
+  same database concurrently, index updates are distributed automatically.
 - **Cross-Runtime Compatibility:** Works in Node.js, Deno and Bun.
-- **Flexible Data Types:** Support for strings, numbers, objects, dates, maps,
-  sets and more.
-- **Hierarchical Structure:** Organize data with multi-level keys for a logical
-  structure.
-- **Key Ranges:** Retrieve ranges of data efficiently using key ranges.
-- **Indexed:** In-memory index to provide faster lookups of large datasets.
+- **Flexible Data Types**: Store any JavaScript object, including complex types
+  like Maps and Sets.
+- **Key Ranges:** Retrieve ranges of data efficiently directly from the index
+  using key ranges.
 
-### **Installation**
+## **Installation**
 
 Full installation instructions available at <https://jsr.io/@cross/kv>
 
@@ -30,7 +39,7 @@ deno add @cross/kv
 bunx jsr add @cross/kv
 ```
 
-### **Simple Usage**
+## **Simple Usage**
 
 ```typescript
 import { KV } from "@cross/kv";
@@ -52,7 +61,7 @@ await kvStore.delete(["data", "username"]);
 await kvStore.close();
 ```
 
-### **Advanced Usage**
+## **Advanced Usage**
 
 ```typescript
 import { KV } from "@cross/kv";
@@ -91,15 +100,17 @@ await kvStore.set(["users", "by_id", 5], {
 });
 
 // Use the index to select users between 2 and 4
-console.log(
-  "Users 2-4:",
-  await kvStore.list(["users", "by_id", { from: 2, to: 4 }]),
-);
+const query = ["users", "by_id", { from: 2, to: 4 }];
+// ... will display Document count: 3
+console.log("Document count: " + kvStore.count(query));
 // ... will output the objects of Alice, Ben and Lisa
+for await (const entry of kvStore.iterate(query)) {
+  console.log(entry);
+}
 
 // Use a plain JavaScript filter (less performant) to find a user named ben
-const ben = (await kvStore.list(["users"])).filter((user) =>
-  user.name === "Ben"
+const ben = (await kvStore.listAll(["users"])).filter((user) =>
+  user.data.name === "Ben"
 );
 console.log("Ben: ", ben); // Outputs the object of Ben
 
@@ -107,30 +118,77 @@ console.log("Ben: ", ben); // Outputs the object of Ben
 await kvStore.close();
 ```
 
-### **API Documentation**
+## **API Documentation**
+
+### Methods
 
 - `KV` class
-  - `open(filepath)`
-  - `set(key, value)`
-  - `get(key)`
-  - `list(key)`
-  - `delete(key)`
-  - `beginTransaction()`
-  - `endTransaction()`
-  - `vacuum()`
-  - `close()`
-- `KVKey` class (Detail the constructor and methods)
-- `KVKeyRange` interface
+  - `async open(filepath)` - Opens the KV store.
+  - `async set(key, value)` - Stores a value.
+  - `async get(key)` - Retrieves a value.
+  - `async *iterate(query)` - Iterates over entries for a key.
+  - `async listAll(query)` - Gets all entries for a key as an array.
+  - `delete(key)` - Deletes a key-value pair.
+  - `beginTransaction()` - Starts a transaction.
+  - `async endTransaction()` - Ends a transaction.
+  - `async vacuum()` - Reclaims storage space.
+  - `close()` - Closes the KV store.
 
-### **Contributing**
+### Keys
+
+- Arrays of strings or numbers
+- First element in a key must be a string.
+- Strings must only contain alphanumeric characters, hyphens, underscores or
+  "@".
+
+**Examples keys**
+
+```
+["users", 123]
+["products", "category", { from: 10, to: 20 }]
+```
+
+### Values
+
+Values (or documents) are the data you store in the database. They can be any
+JavaScript primitive or a complex object containing CBOR-serializable types,
+including:
+
+- **Numbers:** (e.g., `12345`)
+- **Strings:** (e.g., `"Hello, world!"`)
+- **Booleans:** (e.g., `true`)
+- **Arrays:** (e.g., `[1, 2, 3]`)
+- **Objects:** (e.g., `{ "name": "Alice", "age": 30 }`)
+- **Maps:** (e.g., `new Map([["key1", "value1"], ["key2", "value2"]])`)
+- **Sets:** (e.g., `new Set([1, 2, 3])`)
+- **null**
+
+### Queries
+
+Queries are basically keys, but with additional support for ranges, which are
+objects like `{ from, to }`. An empty range (`{}`) means any document.
+
+**Example queries**
+
+```
+// All users
+["users"]       
+// Specific user with ID 123          
+["users", 123]            
+// All products in any category
+["products", "category"]  
+// Products in category 10 to 20
+["products", "category", { from: 10, to: 20 }] 
+ // Sub document "specification" of products in category 10 to 20
+["products", "category", { from: 10, to: 20 }, "specifications"]
+// Sub-document "author" of any book
+["products", "book", {}, "author"]
+```
+
+## **Contributing**
 
 Contributions are welcome! Feel free to open issues or submit pull requests.
 
-### **License**
+## **License**
 
 MIT License
-
-**Work in Progress Disclaimer**
-
-Please note that `cross/kv` is still under development. The API and features
-might be subject to change.

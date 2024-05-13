@@ -1,4 +1,4 @@
-import type { KVKey, KVKeyRange } from "./key.ts";
+import type { KVKeyInstance, KVKeyRange } from "./key.ts";
 
 /**
  * Represents content of a node within the KVIndex tree.
@@ -24,8 +24,15 @@ type KVIndexNodes = Map<string | number, KVIndexContent>;
  * It uses a tree-like structure for fast prefix and range-based searches.
  */
 export class KVIndex {
-  private index: KVIndexContent;
+  public index!: KVIndexContent;
   constructor() {
+    this.clear(); // sets this.index
+  }
+
+  /**
+   * Fully reset the index
+   */
+  clear() {
     this.index = {
       children: new Map(),
     };
@@ -35,21 +42,20 @@ export class KVIndex {
    * Adds an entry to the index.
    * @throws {Error} If 'overwrite' is false and a duplicate key is found.
    */
-  add(key: KVKey, offset: number) {
+  add(key: KVKeyInstance, offset: number) {
     let current = this.index;
-    for (const part of key.get()) {
-      const currentPart = current.children?.get(part as string | number);
-      if (currentPart) {
-        current = currentPart;
-      } else {
-        const newObj = {
-          children: new Map(),
-        };
-        current.children.set(part as string | number, newObj);
-        current = newObj;
+    const keyParts = key.get(); // Get key parts once to avoid repeated calls
+
+    for (const part of keyParts) {
+      let currentPart = current.children.get(part as string | number);
+      if (!currentPart) {
+        currentPart = { children: new Map() };
+        current.children.set(part as string | number, currentPart);
       }
+      current = currentPart;
     }
-    current!.reference = offset;
+
+    current.reference = offset; // Direct assignment
   }
 
   /**
@@ -57,7 +63,7 @@ export class KVIndex {
    * @param transaction - The transaction to remove.
    * @returns The removed data row reference, or undefined if the key was not found.
    */
-  delete(key: KVKey): number | undefined {
+  delete(key: KVKeyInstance): number | undefined {
     let current = this.index;
     for (const part of key.get()) {
       const currentPart = current.children.get(part as (string | number));
@@ -81,11 +87,13 @@ export class KVIndex {
    * @param key - The key to search for (can include ranges)
    * @returns An array of data row references.
    */
-  get(key: KVKey): number[] {
+  get(key: KVKeyInstance, limit?: number): number[] {
     const resultSet: number[] = [];
     const keyLength = key.get().length;
 
     function recurse(node: KVIndexContent, keyIndex: number): void {
+      if (limit !== undefined && resultSet.length >= limit) return; // Stop recursion early if limit reached
+
       if (keyIndex >= keyLength) {
         // We've reached the end of the key
         if (node.reference !== undefined) {

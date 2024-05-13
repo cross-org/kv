@@ -1,75 +1,97 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { test } from "@cross/test";
-import { KVKey /* ... */ } from "./key.ts";
+import { type KVKey, KVKeyInstance, /* ... */ type KVQuery } from "./key.ts";
 
-test("KVKey: constructs with valid string key", () => {
-  const key = new KVKey(["users", "user123"]);
+test("KVKeyInstance: constructs with valid string key", () => {
+  const key = new KVKeyInstance(["users", "user123"]);
   assertEquals(key.get(), ["users", "user123"]);
 });
 
-test("KVKey: throws with invalid string key (colon)", () => {
+test("KVKeyInstance: throws with invalid string key (colon)", () => {
   assertThrows(
-    () => new KVKey(["users", ":lol"]),
+    () => new KVKeyInstance(["users", ":lol"]),
     TypeError,
     "String elements in the key can only contain",
   );
 });
 
-test("KVKey: throws with invalid string key (space)", () => {
+test("KVKeyInstance: throws with invalid string key (space)", () => {
   assertThrows(
-    () => new KVKey(["users", "l ol"]),
+    () => new KVKeyInstance(["users", "l ol"]),
     TypeError,
     "String elements in the key can only contain",
   );
 });
 
-test("KVKey: constructs with valid number key", () => {
-  const key = new KVKey(["data", 42]);
+test("KVKeyInstance: constructs with valid number key", () => {
+  const key = new KVKeyInstance(["data", 42]);
   assertEquals(key.get(), ["data", 42]);
 });
 
-test("KVKey: returns correct string representation", () => {
-  const key = new KVKey(["users", "data", "user123"]);
+test("KVKeyInstance: returns correct string representation", () => {
+  const key = new KVKeyInstance(["users", "data", "user123"]);
   assertEquals(key.getKeyRepresentation(), "users.data.user123");
 });
 
-test("KVKey: constructs with valid range", () => {
-  const key = new KVKey(["users", { from: "user001", to: "user999" }], true);
+test("KVKeyInstance: constructs with valid range", () => {
+  const key = new KVKeyInstance(
+    ["users", { from: "user001", to: "user999" }],
+    true,
+  );
   assertEquals(key.get(), ["users", { from: "user001", to: "user999" }]);
 });
 
-test("KVKey: constructs with valid range (only from)", () => {
-  const key = new KVKey(["users", { from: "user001" }], true);
+test("KVKeyInstance: constructs with valid range (only from)", () => {
+  const key = new KVKeyInstance(["users", { from: "user001" }], true);
   assertEquals(key.get(), ["users", { from: "user001" }]);
 });
 
-test("KVKey: constructs with valid range (only to)", () => {
-  const key = new KVKey(["users", { to: "user001" }], true);
+test("KVKeyInstance: constructs with valid range (only to)", () => {
+  const key = new KVKeyInstance(["users", { to: "user001" }], true);
   assertEquals(key.get(), ["users", { to: "user001" }]);
 });
 
-test("KVKey: constructs with valid range (all)", () => {
-  const key = new KVKey(["users", {}], true);
+test("KVKeyInstance: constructs with valid range (all)", () => {
+  const key = new KVKeyInstance(["users", {}], true);
   assertEquals(key.get(), ["users", {}]);
 });
 
-test("KVKey: constructs with invalid range (extra property)", () => {
+test("KVKeyInstance: constructs with invalid range (extra property)", () => {
   assertThrows(
     // @ts-expect-error test unknown property
-    () => new KVKey(["users", { test: 1 }], true),
+    () => new KVKeyInstance(["users", { test: 1 }], true),
     TypeError,
     "Ranges must have only",
   );
 });
 
-test("KVKey: throws on empty key", () => {
-  assertThrows(() => new KVKey([]), TypeError, "Key cannot be empty");
+test("KVKeyInstance: throws on empty key", () => {
+  assertThrows(() => new KVKeyInstance([]), TypeError, "Key cannot be empty");
 });
 
-test("KVKey: only allows string keys as first entry", () => {
+test("KVKeyInstance: only allows string keys as first entry", () => {
   assertThrows(
-    () => new KVKey([123121]),
+    () => new KVKeyInstance([123121]),
     TypeError,
     "First index of the key must be a string",
   );
+});
+
+test("KVKeyInstance: toUint8Array and fromUint8Array", () => {
+  const originalKeys: (KVKey | KVQuery)[] = [
+    ["users", 123, "profile"],
+    ["logs", 2023, 11, 15],
+    ["settings", "theme", "dark"],
+  ];
+
+  for (const originalKey of originalKeys) {
+    const keyInstance = new KVKeyInstance(
+      originalKey,
+      Array.isArray(originalKey) &&
+        originalKey.some((element) => typeof element === "object"),
+    ); // Pass `true` for allowRange if it's a query
+    const encodedKey = keyInstance.toUint8Array();
+    const decodedKeyInstance = new KVKeyInstance(encodedKey, false, false); // Decode without validation
+    assertEquals(decodedKeyInstance.get(), originalKey);
+  }
 });

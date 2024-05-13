@@ -4,4 +4,8 @@ export const LOCK_STALE_TIMEOUT_S = 60_000;
 
 export const SUPPORTED_LEDGER_VERSIONS = ["ALPH"];
 
+export const LEDGER_BASE_OFFSET = 1_024;
+
+export const LEDGER_PREFETCH_BYTES = 1_024;
+
 export const SYNC_INTERVAL_MS = 1_000;
