@@ -35,3 +35,7 @@ bunfig.toml
 # Local
 lab/
 lab.ts
+mydatabase*/
+
+# Pup data
+.pup

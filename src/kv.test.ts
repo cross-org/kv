@@ -1,7 +1,8 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { test } from "@cross/test";
-import { KV, type KVDataEntry } from "./kv.ts";
+import { KV, type KVDataEntry, type KVOptions } from "./kv.ts";
 import { tempfile } from "@cross/fs";
+import { SYNC_INTERVAL_MS } from "./constants.ts";
 
 test("KV: set, get and delete (numbers and strings)", async () => {
   const tempFilePrefix = await tempfile();
@@ -288,4 +289,68 @@ test("KV: vacuum", async () => {
   );
 
   kvStore.close();
+});
+
+test("KV Options: defaults work correctly", () => {
+  const kv = new KV(); // No options provided
+  assertEquals(kv.autoSync, true);
+  assertEquals(kv.syncIntervalMs, SYNC_INTERVAL_MS);
+  kv.close();
+});
+
+test("KV Options: custom options are applied", () => {
+  const options: KVOptions = {
+    autoSync: false,
+    syncIntervalMs: 5000,
+  };
+  const kv = new KV(options);
+  assertEquals(kv.autoSync, false);
+  assertEquals(kv.syncIntervalMs, 5000);
+  kv.close();
+});
+
+test("KV Options: throws on invalid autoSync type", () => {
+  const options: KVOptions = {
+    // @ts-expect-error Test
+    autoSync: "not a boolean", // Incorrect type
+  };
+  assertThrows(
+    () => new KV(options),
+    TypeError,
+    "Invalid option: autoSync must be a boolean",
+  );
+});
+
+test("KV Options: throws on invalid syncIntervalMs type", () => {
+  const options: KVOptions = {
+    // @ts-expect-error Test
+    syncIntervalMs: "not a number", // Incorrect type
+  };
+  assertThrows(
+    () => new KV(options),
+    TypeError,
+    "Invalid option: syncIntervalMs must be a positive integer",
+  );
+});
+
+test("KV Options: throws on negative syncIntervalMs", () => {
+  const options: KVOptions = {
+    syncIntervalMs: -1000, // Negative value
+  };
+  assertThrows(
+    () => new KV(options),
+    TypeError,
+    "Invalid option: syncIntervalMs must be a positive integer",
+  );
+});
+
+test("KV Options: throws on zero syncIntervalMs", () => {
+  const options: KVOptions = {
+    syncIntervalMs: 0, // Zero value
+  };
+  assertThrows(
+    () => new KV(options),
+    TypeError,
+    "Invalid option: syncIntervalMs must be a positive integer",
+  );
 });

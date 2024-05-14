@@ -8,6 +8,7 @@ import {
 import { lock, unlock } from "./utils/file.ts";
 import {
   LEDGER_BASE_OFFSET,
+  LEDGER_MAX_READ_FAILURES,
   LEDGER_PREFETCH_BYTES,
   SUPPORTED_LEDGER_VERSIONS,
 } from "./constants.ts";
@@ -99,39 +100,50 @@ export class KVLedger {
 
     // Update offset
     await lock(this.dataPath);
-    await this.readHeader(false);
+    let reusableFd;
+    try {
+      await this.readHeader(false);
 
-    // If the ledger is re-created (by vacuum or overwriting), there will be a time in the cached header
-    // and there will be a different time after reading the header
-    if (currentCreated !== 0 && currentCreated !== this.header.created) {
+      // If the ledger is re-created (by vacuum or overwriting), there will be a time in the cached header
+      // and there will be a different time after reading the header
+      if (currentCreated !== 0 && currentCreated !== this.header.created) {
+        await unlock(this.dataPath);
+
+        // Return 0 to invalidate this ledger
+        return null;
+      }
+
+      // If there is new transactions
+      reusableFd = await rawOpen(this.dataPath, false);
+      let failures = 0;
+      while (currentOffset < this.header.currentOffset) {
+        if (failures > LEDGER_MAX_READ_FAILURES) {
+          throw new Error("Internal sync error: Read attempts exceeded");
+        }
+        try {
+          const result = await this.rawGetTransaction(
+            currentOffset,
+            false,
+            false,
+            reusableFd,
+          );
+          newTransactions.push({
+            key: result.transaction.key!,
+            operation: result.transaction.operation!,
+            offset: currentOffset,
+          }); // Add the    transaction
+          currentOffset += result.length; // Advance the offset
+        } catch (_e) {
+          failures++;
+        }
+      }
+
+      // Update the cached header's currentOffset
+      this.header.currentOffset = currentOffset;
+    } finally {
+      if (reusableFd) reusableFd.close();
       await unlock(this.dataPath);
-
-      // Return 0 to invalidate this ledger
-      return null;
     }
-
-    // If there is new transactions
-    const reusableFd = await rawOpen(this.dataPath, false);
-    while (currentOffset < this.header.currentOffset) {
-      const result = await this.rawGetTransaction(
-        currentOffset,
-        false,
-        false,
-        reusableFd,
-      );
-      newTransactions.push({
-        key: result.transaction.key!,
-        operation: result.transaction.operation!,
-        offset: currentOffset,
-      }); // Add the    transaction
-      currentOffset += result.length; // Advance the offset
-    }
-    reusableFd.close();
-
-    // Update the cached header's currentOffset
-    this.header.currentOffset = currentOffset;
-
-    await unlock(this.dataPath);
 
     return newTransactions;
   }
@@ -199,7 +211,6 @@ export class KVLedger {
       // Set numeric fields
       headerView.setFloat64(8, this.header.created, false); // false for little-endian
       headerView.setUint32(16, this.header.currentOffset, false);
-
       // Write the header data
       await writeAtPosition(fd, new Uint8Array(headerBuffer), 0);
     } finally {
@@ -214,6 +225,7 @@ export class KVLedger {
   ): Promise<number> {
     const offset = this.header.currentOffset;
     if (doLock) await lock(this.dataPath);
+    await this.readHeader(false);
     let fd;
     try {
       fd = await rawOpen(this.dataPath, true);
@@ -268,10 +280,12 @@ export class KVLedger {
         4,
         false,
       );
+
       const transaction = new KVTransaction();
 
       // Read transaction header
       let transactionHeaderData;
+
       // - directly from file
       if (headerLength + 8 > LEDGER_PREFETCH_BYTES) {
         transactionHeaderData = await readAtPosition(
@@ -385,5 +399,9 @@ export class KVLedger {
       // 7. Unlock
       await unlock(this.dataPath);
     }
+  }
+
+  public isClosing() {
+    return this.aborted;
   }
 }

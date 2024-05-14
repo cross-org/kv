@@ -129,9 +129,18 @@ export class KVTransaction {
       throw new Error("Invalid data: Hash data truncated");
     }
     this.hash = data.subarray(offset, offset + hashLength);
+    offset += hashLength;
+
+    // Do not allow extra data
+    if (offset !== data.byteLength) {
+      throw new Error("Invalid data: Extra data in transaction header");
+    }
   }
 
-  public dataFromUint8Array(data: Uint8Array) {
+  public async dataFromUint8Array(data: Uint8Array) {
+    if (!compareHash(await sha1(data), this.hash!)) {
+      throw new Error("Invalid data: Read data not matching hash");
+    }
     this.data = data;
   }
 
@@ -181,14 +190,8 @@ export class KVTransaction {
     return fullData;
   }
 
-  public async validateAndGetData(): Promise<unknown | null> {
-    // Validate Transaction Header
-    const expectedHash = await sha1(this.data!);
-    if (!compareHash(this.hash!, expectedHash)) {
-      throw new Error("Invalid data: Transaction header hash mismatch");
-    }
-
-    // Return validated data
+  public getData(): unknown | null {
+    // Return data, should be validated through create or fromUint8Array
     if (this.data) {
       return decode(this.data);
     } else {

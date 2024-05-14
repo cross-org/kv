@@ -5,7 +5,7 @@ import { KVOperation, KVTransaction } from "./transaction.ts";
 
 test("KVTransaction: create and toUint8Array", async () => {
   const key = new KVKeyInstance(["testKey"]);
-  const value = { name: "Alice", age: 30 };
+  const value = { test: "data" };
   const timestamp = Date.now();
 
   const transaction = new KVTransaction();
@@ -13,8 +13,11 @@ test("KVTransaction: create and toUint8Array", async () => {
 
   const uint8Array = transaction.toUint8Array();
   const decodedTransaction = new KVTransaction();
-  decodedTransaction.headerFromUint8Array(uint8Array.slice(8)); // Skip the initial 8 bytes (header and data lengths)
-  decodedTransaction.dataFromUint8Array(transaction.data!);
+  const headerLength = new DataView(uint8Array.buffer).getUint32(0);
+  decodedTransaction.headerFromUint8Array(
+    uint8Array.slice(8, 8 + headerLength),
+  ); // Skip the initial 8 bytes (header and data lengths)
+  await decodedTransaction.dataFromUint8Array(transaction.data!);
   assertEquals(
     decodedTransaction.key?.getKeyRepresentation(),
     key.getKeyRepresentation(),
@@ -22,7 +25,7 @@ test("KVTransaction: create and toUint8Array", async () => {
   assertEquals(decodedTransaction.operation, transaction.operation);
   assertEquals(decodedTransaction.timestamp, transaction.timestamp);
 
-  const decodedData = await decodedTransaction.validateAndGetData();
+  const decodedData = decodedTransaction.getData();
   assertEquals(decodedData, value);
 });
 

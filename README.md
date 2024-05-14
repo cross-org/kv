@@ -4,10 +4,10 @@ A cross-platform, in-memory indexed and file based Key/Value database for
 JavaScript and TypeScript, designed for seamless multi-process access and
 compatibility across Node.js, Deno, and Bun.
 
-_Please note that `cross/kv` is still under development. The API and features
-are starting to stabilize, but are still subject to change._
+_Please note that `cross/kv` is currently in **beta**. The API and features are
+starting to stabilize, but are still subject to change._
 
-## **Features**
+## Features
 
 - **Indexed Key/Value Storage**: Store and retrieve data easily using
   hierarchical keys, with an in-memory index to provide fast lookups of large
@@ -24,7 +24,7 @@ are starting to stabilize, but are still subject to change._
 - **Key Ranges:** Retrieve ranges of data efficiently directly from the index
   using key ranges.
 
-## **Installation**
+## Installation
 
 Full installation instructions available at <https://jsr.io/@cross/kv>
 
@@ -39,12 +39,13 @@ deno add @cross/kv
 bunx jsr add @cross/kv
 ```
 
-## **Simple Usage**
+## Simple Usage
 
 ```typescript
 import { KV } from "@cross/kv";
 
 const kvStore = new KV();
+
 await kvStore.open("./mydatabase/"); // Path where data files will be stored
 
 // Set a value
@@ -61,7 +62,7 @@ await kvStore.delete(["data", "username"]);
 await kvStore.close();
 ```
 
-## **Advanced Usage**
+## Advanced Usage
 
 ```typescript
 import { KV } from "@cross/kv";
@@ -118,11 +119,12 @@ console.log("Ben: ", ben); // Outputs the object of Ben
 await kvStore.close();
 ```
 
-## **API Documentation**
+## API Documentation
 
 ### Methods
 
-- `KV` class
+- `KV(options)` - Main class. Options such as `autoSync` and `syncIntervalMs`
+  are optional.
   - `async open(filepath)` - Opens the KV store.
   - `async set(key, value)` - Stores a value.
   - `async get(key)` - Retrieves a value.
@@ -130,8 +132,11 @@ await kvStore.close();
   - `async listAll(query)` - Gets all entries for a key as an array.
   - `delete(key)` - Deletes a key-value pair.
   - `beginTransaction()` - Starts a transaction.
-  - `async endTransaction()` - Ends a transaction.
+  - `async endTransaction()` - Ends a transaction, returns a list of `Errors` if
+    any occurred.
   - `async vacuum()` - Reclaims storage space.
+  - `on(eventName, eventData)` - Listen for events such as `sync`,
+    `watchdogError` or `closing`.
   - `close()` - Closes the KV store.
 
 ### Keys
@@ -183,6 +188,58 @@ objects like `{ from, to }`. An empty range (`{}`) means any document.
 ["products", "category", { from: 10, to: 20 }, "specifications"]
 // Sub-document "author" of any book
 ["products", "book", {}, "author"]
+```
+
+## Multi-Process Synchronization
+
+`cross/kv` has a built in mechanism for synchronizing the in-memory index with
+the transaction ledger, allowing for multiple processes to work with the same
+database simultanously. Due to the append-only design of the ledger, each
+process can update it's internal state by reading everything after the last
+processed transaction. An internal watchdog actively checks for new transactions
+and updates the in-memory index accordingly. The synchnization frequency can be
+controlled by the option `syncIntervalMs`, which defaults to `1000` (1 second).
+
+In single process scenarios, the watchdog can be disabled by setting the
+`autoSync` option to `false`.
+
+Subscribe to the `sync` event to receive notifications about synchronization
+results and potential errors.
+
+```typescript
+const kvStore = new KV();
+await kvStore.open("./mydatabase/");
+
+// Subscribe to sync events for monitoring
+kvStore.on("sync", (eventData) => {
+  switch (eventData.result) {
+    case "ready":
+      console.log("Everything is up to date.");
+      break;
+    case "blocked":
+      console.warn(
+        "Synchronization is temporarily blocked (e.g., during vacuum).",
+      );
+      break;
+    case "success":
+      console.log(
+        "Synchronization completed successfully, new transactions added to the index.",
+      );
+      break;
+    case "ledgerInvalidated":
+      console.warn(
+        "Ledger invalidated! The database hash been reopened and the index resynchronized to maintain consistency.",
+      );
+      break;
+    case "error":
+      // Error Handling
+      console.error("Synchronization error:", eventData.error);
+      // Log the error, report it, or take appropriate action.
+      break;
+    default:
+      console.warn("Unknown sync result:", eventData.result);
+  }
+});
 ```
 
 ## **Contributing**

@@ -1,9 +1,14 @@
 // deno-lint-ignore-file no-explicit-any
+
+// Internal dependencies
 import { KVIndex } from "./index.ts";
 import { type KVKey, KVKeyInstance, type KVQuery } from "./key.ts";
 import { KVOperation, KVTransaction } from "./transaction.ts";
 import { KVLedger } from "./ledger.ts";
 import { SYNC_INTERVAL_MS } from "./constants.ts";
+
+// External dependencies
+import { EventEmitter } from "node:events";
 
 /**
  * Represents a single data entry returned after querying the Key/Value store.
@@ -21,25 +26,82 @@ export interface KVDataEntry {
 }
 
 /**
- * Cross-platform Key-Value store implementation backed by file storage.
+ * Options for configuring the behavior of the KV store.
  */
-export class KV {
+export interface KVOptions {
+  /**
+   * Enables or disables automatic synchronization of the in-memory index with the on-disk ledger.
+   *
+   * When enabled (default), a background process will periodically sync the index to ensure consistency
+   * across multiple processes. Disabling this may improve performance in single-process scenarios,
+   * but you'll need to manually call `kvStore.sync()` to keep the index up-to-date.
+   *
+   * @defaultValue `true`
+   */
+  autoSync?: boolean;
+
+  /**
+   * The time interval (in milliseconds) between automatic synchronization operations.
+   *
+   * This value controls how frequently the in-memory index is updated with changes from the on-disk ledger.
+   * A shorter interval provides more up-to-date data at the cost of potentially higher overhead.
+   * A longer interval reduces overhead but may result in stale data.
+   *
+   * @defaultValue `1000`
+   */
+  syncIntervalMs?: number;
+}
+
+/**
+ * A cross-platform key-value store backed by file storage.
+ *
+ * Provides a persistent and reliable storage mechanism for key-value pairs,
+ * using an on-disk ledger for data integrity and an in-memory index for efficient retrieval.
+ */
+export class KV extends EventEmitter {
+  // Storage
   private index: KVIndex = new KVIndex();
-
-  private pendingTransactions: KVTransaction[] = [];
-  private isInTransaction: boolean = false;
-
   private ledger?: KVLedger;
+  private pendingTransactions: KVTransaction[] = [];
+
+  // Configuration
   private ledgerPath?: string;
-  private watchdogTimer?: number;
+  public autoSync: boolean = true; // Public only to allow testing
+  public syncIntervalMs: number = SYNC_INTERVAL_MS; // Public only to allow testing
 
+  // States
   private blockSync: boolean = false; // Syncing can be blocked during vacuum
-
   private aborted: boolean = false;
+  private isInTransaction: boolean = false;
+  private watchdogTimer?: number; // Undefined if not scheduled or currently running
+  private watchdogPromise?: Promise<void>;
 
-  constructor() {
+  constructor(options: KVOptions = {}) {
+    super();
+
+    // Validate and set options
+    // - autoSync
+    if (
+      options.autoSync !== undefined && typeof options.autoSync !== "boolean"
+    ) {
+      throw new TypeError("Invalid option: autoSync must be a boolean");
+    }
+    this.autoSync = options.autoSync ?? true;
+    // - syncIntervalMs
+    if (
+      options.syncIntervalMs !== undefined &&
+      (!Number.isInteger(options.syncIntervalMs) || options.syncIntervalMs <= 0)
+    ) {
+      throw new TypeError(
+        "Invalid option: syncIntervalMs must be a positive integer",
+      );
+    }
+    this.syncIntervalMs = options.syncIntervalMs ?? SYNC_INTERVAL_MS;
+
+    if (this.autoSync) {
+      this.watchdogPromise = this.watchdog();
+    }
   }
-
   /**
    * Opens the Key-Value store based on a provided file path.
    * Initializes the index and data files.
@@ -50,46 +112,121 @@ export class KV {
   public async open(
     filePath: string,
     createIfMissing: boolean = true,
-    forceSync: boolean = false,
   ) {
+    // Do not allow re-opening a closed database
+    if (this.aborted) {
+      throw new Error("Could not open, database already closed.");
+    }
+
     // If there is an existing ledger, close it and clear the index
     if (this.ledger) {
       this.ledger?.close();
       this.index.clear();
-      // ToDo: Is an abort signal needed to prevent a current watchdog to recurse?
-      clearTimeout(this.watchdogTimer!); // Clear the timer if it exists
     }
 
     // Open the ledger, and start a new watchdog
     this.ledger = new KVLedger(filePath);
     this.ledgerPath = filePath;
     await this.ledger.open(createIfMissing);
-    await this.watchdog(forceSync);
+
+    // Do the initial synchronization
+    // - If `this.autoSync` is enabled, additional synchronizations will be carried out every `this.syncIntervalMs`
+    await this.sync(true);
   }
 
   /**
-   * Starts a watchdog function that periodically syncs the ledger with disk.
+   * Starts a background process to periodically synchronize the in-memory index with the on-disk ledger.
+   *
+   * This function is crucial for maintaining consistency between the index and the ledger when the database is
+   * accessed by multiple processes or consumers.
+   *
+   * It is automatically invoked if `autoSync` is enabled during construction.
+   *
+   * @emits sync - Emits an event if anything goes wrong, containing the following information:
+   *   - `result`: "error"
+   *   - `error`: Error object
+   *
+   * @remarks
+   * - The synchronization interval is controlled by the `syncIntervalMs` property.
+   * - If the ledger is not open or is in the process of closing, the synchronization will not occur.
+   * - Errors during synchronization are emitted as `sync` events with the error in the payload.
    */
-  private async watchdog(forceSync: boolean = false) {
+  private async watchdog() {
     if (this.aborted) return;
-    await this.sync(forceSync);
+
+    // Wrap all operations in try/catch
+    try {
+      await this.sync();
+    } catch (watchdogError) {
+      // Use the same event reporting format as the sync() method
+      const syncResult = "error";
+      const errorDetails = new Error(
+        "Error in watchdog: " + watchdogError.message,
+        { cause: watchdogError },
+      );
+      // @ts-ignore .emit does indeed exist
+      this.emit("sync", { result: syncResult, error: errorDetails });
+    }
 
     // Reschedule
-    this.watchdogTimer = setTimeout(() => this.watchdog(), SYNC_INTERVAL_MS);
+    this.watchdogTimer = setTimeout(
+      async () => {
+        // Make sure current run is done
+        await this.watchdogPromise;
+
+        // Initiate a new run
+        this.watchdogPromise = this.watchdog();
+      },
+      this.syncIntervalMs,
+    );
   }
 
+  /**
+   * Synchronizes the in-memory index with the on-disk ledger.
+   *
+   * This method fetches new transactions from the ledger and applies them to the index.
+   * If the ledger is invalidated, it automatically re-opens the database.
+   *
+   * @param force - If true, forces synchronization even if it's currently blocked (e.g., during a vacuum).
+   *
+   * @emits sync - Emits an event with the synchronization result. The event detail object has the following structure:
+   *   - `result`: <string representing success state> | "error"
+   *   - `error`: Error object (if an error occurred) or null
+   *
+   * @throws {Error} If an unexpected error occurs during synchronization.
+   */
   private async sync(force: boolean = false) {
+    // Early returns
+    if (!this.ledger || this.ledger?.isClosing()) return;
     if (this.aborted) return;
-    if (this.blockSync && !force) return;
+    if (this.blockSync && !force) {
+      // @ts-ignore .emit does indeed exist
+      this.emit("sync", { result: "blocked", error: errorDetails });
+      return;
+    }
+
+    let syncResult:
+      | "ready"
+      | "blocked"
+      | "success"
+      | "ledgerInvalidated"
+      | "error" = "ready";
+    let errorDetails: Error | null = null;
+
     try {
       const newTransactions = await this.ledger?.sync();
       // If sync() do return null the ledger is invalidated
       // - Return without rescheduling the watchdog, and open the new ledger
       if (newTransactions === null) {
-        return this.open(this.ledgerPath!, false);
-      }
-
-      if (newTransactions) {
+        // @ts-ignore .emit does indeed exist
+        syncResult = "ledgerInvalidated";
+        await this.open(this.ledgerPath!, false);
+      } else if (newTransactions) {
+        // Change status to success if there are new transactions
+        if (newTransactions.length > 0) {
+          syncResult = "success";
+        }
+        // Handle each new transactionx
         for (const entry of newTransactions) {
           try {
             // Apply transaction to the index
@@ -101,26 +238,50 @@ export class KV {
                 this.index.delete(entry.key);
                 break;
             }
-          } catch (_e) {
-            console.error(_e);
-            throw new Error("Error while encoding data");
+          } catch (transactionError) {
+            // Change result to error
+            syncResult = "error";
+            errorDetails = new Error(
+              "Error processing transaction: " + transactionError.message,
+              { cause: transactionError },
+            );
+            // @ts-ignore .emit does indeed exist
+            this.emit("sync", { result: syncResult, error: errorDetails });
           }
         }
+      } else {
+        throw new Error("Undefined error during ledger sync");
       }
-    } catch (error) {
-      console.error("Error in watchdog sync:", error);
+    } catch (syncError) {
+      syncResult = "error";
+      errorDetails = new Error(
+        "Error during ledger sync: " + syncError.message,
+        { cause: syncError },
+      );
+    } finally {
+      // @ts-ignore .emit does indeed exist
+      this.emit("sync", { result: syncResult, error: errorDetails });
     }
   }
 
   /**
-   * Performs a vacuum operation on the underlying ledger to reclaim space.
+   * Performs a vacuum operation to reclaim space in the underlying ledger.
+   *
+   * This operation is essential for maintaining performance as the database grows over time.
+   * It involves rewriting the ledger to remove deleted entries, potentially reducing its size.
+   *
+   * @remarks
+   * - Vacuuming temporarily blocks regular synchronization (`blockSync` is set to `true`).
+   * - The database is automatically re-opened after the vacuum is complete to ensure consistency.
+   *
+   * @async
    */
   public async vacuum(): Promise<void> {
     this.blockSync = true;
     await this.ledger?.vacuum();
 
     // Force re-opening the database
-    await this.open(this.ledgerPath!, false, true);
+    await this.open(this.ledgerPath!, false);
     this.blockSync = false;
   }
 
@@ -224,7 +385,7 @@ export class KV {
       if (result?.transaction) {
         yield {
           ts: result?.transaction.timestamp!,
-          data: await result?.transaction.validateAndGetData(),
+          data: result?.transaction.getData(),
         };
         count++;
       }
@@ -327,12 +488,11 @@ export class KV {
   }
 
   /**
-   * Processes a single transaction and makes necessary updates to the index and
-   * data files.
-   *
-   * File locks should be handled outside this function.
+   * Processes a single transaction and updates the index and data files.
    *
    * @param pendingTransaction - The transaction to execute.
+   *
+   * @throws {Error} If the transaction fails or if there's an issue updating the index or data files.
    */
   async runTransaction(
     pendingTransaction: KVTransaction,
@@ -362,13 +522,13 @@ export class KV {
     }
   }
 
-  public close() {
+  public async close() {
+    // First await current watchdog run
+    await this.watchdogPromise;
+    // @ts-ignore Closing ledger
+    this.emit("closing");
     this.aborted = true;
     clearTimeout(this.watchdogTimer!); // Clear the timer if it exists
     this.ledger?.close();
-  }
-
-  public unsafeGetIndex(): KVIndex {
-    return this.index;
   }
 }

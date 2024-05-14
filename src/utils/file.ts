@@ -101,7 +101,6 @@ export async function lock(filePath: string): Promise<boolean> {
       } else { // Runtime.Node
         await writeFile(lockFile, "", { flag: "wx" }); // 'wx' for exclusive creation
       }
-
       // Lock acquired!
       return true;
     } catch (error) {
