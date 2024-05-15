@@ -213,13 +213,15 @@ export class KVLedger {
     transaction: KVTransaction,
     doLock: boolean = true,
   ): Promise<number> {
-    const offset = this.header.currentOffset;
-
     // Compose the transaction before locking to reduce lock time
     const transactionData = await transaction.toUint8Array();
 
     if (doLock) await lock(this.dataPath);
+
+    // Update internal offset
     await this.readHeader(false);
+    const offset = this.header.currentOffset;
+
     let fd;
     try {
       fd = await rawOpen(this.dataPath, true);

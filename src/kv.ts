@@ -490,7 +490,7 @@ export class KV extends EventEmitter {
    *
    * @throws {Error} If the transaction fails or if there's an issue updating the index or data files.
    */
-  async runTransaction(
+  private async runTransaction(
     pendingTransaction: KVTransaction,
   ): Promise<void> {
     this.ensureOpen();

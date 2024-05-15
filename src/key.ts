@@ -1,7 +1,4 @@
-/**
- * Regular expression defining the allowed characters in a KV key string.
- */
-export const KV_KEY_ALLOWED_CHARS = /^[a-zA-Z0-9\-_@]+$/;
+import { KV_KEY_ALLOWED_CHARS } from "./constants.ts";
 
 /**
  * Represents a range within a key.
