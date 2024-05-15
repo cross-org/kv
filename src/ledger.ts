@@ -8,6 +8,8 @@ import {
 import { lock, unlock } from "./utils/file.ts";
 import {
   LEDGER_BASE_OFFSET,
+  LEDGER_CURRENT_VERSION,
+  LEDGER_FILE_ID,
   LEDGER_MAX_READ_FAILURES,
   LEDGER_PREFETCH_BYTES,
   SUPPORTED_LEDGER_VERSIONS,
@@ -49,10 +51,10 @@ export class KVLedger {
   private aborted: boolean = false;
   private dataPath: string;
   public header: KVLedgerHeader = {
-    fileId: "CKVD",
-    ledgerVersion: "ALPH",
+    fileId: LEDGER_FILE_ID,
+    ledgerVersion: LEDGER_CURRENT_VERSION,
     created: 0,
-    currentOffset: 1024,
+    currentOffset: LEDGER_BASE_OFFSET,
   };
 
   constructor(filePath: string) {
@@ -147,15 +149,15 @@ export class KVLedger {
     let fd;
     try {
       fd = await rawOpen(this.dataPath, false);
-      const headerData = await readAtPosition(fd, 1024, 0);
+      const headerData = await readAtPosition(fd, LEDGER_BASE_OFFSET, 0);
       const decoded: KVLedgerHeader = {
         fileId: new TextDecoder().decode(headerData.slice(0, 4)),
         ledgerVersion: new TextDecoder().decode(headerData.slice(4, 8)),
         created: new DataView(headerData.buffer).getFloat64(8, false),
-        currentOffset: new DataView(headerData.buffer).getUint32(16, false),
+        currentOffset: new DataView(headerData.buffer).getFloat64(16, false),
       };
 
-      if (decoded.fileId !== "CKVD") {
+      if (decoded.fileId !== LEDGER_FILE_ID) {
         throw new Error("Invalid database file format");
       }
 
@@ -182,7 +184,7 @@ export class KVLedger {
     try {
       fd = await rawOpen(this.dataPath, true);
       // Assuming the same header structure as before
-      const headerDataSize = 4 + 4 + 16; // 4 bytes for fileId, 4 for version, 8 for created, 4 for offset
+      const headerDataSize = 4 + 4 + 8 + 8; // 4 bytes for fileId, 4 for version, 8 for created, 8 for offset
       const headerBuffer = new ArrayBuffer(headerDataSize);
       const headerView = new DataView(headerBuffer);
 
@@ -200,7 +202,7 @@ export class KVLedger {
 
       // Set numeric fields
       headerView.setFloat64(8, this.header.created, false); // false for little-endian
-      headerView.setUint32(16, this.header.currentOffset, false);
+      headerView.setFloat64(16, this.header.currentOffset, false);
       // Write the header data
       await writeAtPosition(fd, new Uint8Array(headerBuffer), 0);
     } finally {

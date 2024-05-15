@@ -1,9 +1,9 @@
 import { KV_KEY_ALLOWED_CHARS } from "./constants.ts";
 
 /**
- * Represents a range within a key.
+ * Represents a range within a query.
  */
-export interface KVKeyRange {
+export interface KVQueryRange {
   from?: string | number;
   to?: string | number;
 }
@@ -27,9 +27,9 @@ export type KVKey = (string | number)[];
  *   - Subsequent elements can be:
  *     - Strings (matching `KV_KEY_ALLOWED_CHARS`)
  *     - Numbers
- *     - `KVKeyRange`
+ *     - `KVQueryRange`
  */
-export type KVQuery = (string | number | KVKeyRange)[];
+export type KVQuery = (string | number | KVQueryRange)[];
 
 /**
  * A class to validate and manage key representations.

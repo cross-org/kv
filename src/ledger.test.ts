@@ -2,7 +2,7 @@ import { assertEquals, assertRejects } from "@std/assert";
 import { test } from "@cross/test";
 import { tempfile } from "@cross/fs";
 import { KVLedger } from "./ledger.ts";
-import { LEDGER_BASE_OFFSET } from "./constants.ts";
+import { LEDGER_BASE_OFFSET, LEDGER_CURRENT_VERSION } from "./constants.ts";
 
 test("KVLedger: readHeader - valid header", async () => {
   // Arrange: Create a temporary ledger file with a valid header
@@ -14,8 +14,8 @@ test("KVLedger: readHeader - valid header", async () => {
   await ledger.readHeader();
 
   // Assert: Verify the header matches the expected values
-  assertEquals(ledger.header.fileId, "CKVD");
-  assertEquals(ledger.header.ledgerVersion, "ALPH");
+  assertEquals(ledger.header.fileId, "CKVD"); // Could be LEDGER_FILE_ID, but kept as "CKVD" to make sure it doesn't change
+  assertEquals(ledger.header.ledgerVersion, LEDGER_CURRENT_VERSION);
   assertEquals(
     ledger.header.created > 0,
     true,

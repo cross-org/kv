@@ -1,4 +1,4 @@
-import type { KVKeyInstance, KVKeyRange } from "./key.ts";
+import type { KVKeyInstance, KVQueryRange } from "./key.ts";
 
 /**
  * Represents content of a node within the KVIndex tree.
@@ -117,7 +117,7 @@ export class KVIndex {
       } else if (
         typeof keyPart === "object"
       ) {
-        const range = keyPart as KVKeyRange;
+        const range = keyPart as KVQueryRange;
 
         // Key range
         for (const [index, childNode] of node.children.entries()) {
