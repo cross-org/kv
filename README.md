@@ -166,12 +166,13 @@ including:
 - **Objects:** (e.g., `{ "name": "Alice", "age": 30 }`)
 - **Maps:** (e.g., `new Map([["key1", "value1"], ["key2", "value2"]])`)
 - **Sets:** (e.g., `new Set([1, 2, 3])`)
+- **Dates:** (e.g., `new Date()`)
 - **null**
 
 ### Queries
 
 Queries are basically keys, but with additional support for ranges, which are
-objects like `{ from, to }`. An empty range (`{}`) means any document.
+objects like `{ from: 5, to: 20 }` or `{ from: "a", to: "l" }`. An empty range (`{}`) means any document.
 
 **Example queries**
 
@@ -182,8 +183,8 @@ objects like `{ from, to }`. An empty range (`{}`) means any document.
 ["users", 123]            
 // All products in any category
 ["products", "category"]  
-// Products in category 10 to 20
-["products", "category", { from: 10, to: 20 }] 
+// Products in category with an id up to 20
+["products", "category", { to: 20 }] 
  // Sub document "specification" of products in category 10 to 20
 ["products", "category", { from: 10, to: 20 }, "specifications"]
 // Sub-document "author" of any book
