@@ -3,27 +3,16 @@
 // Internal dependencies
 import { KVIndex } from "./index.ts";
 import { type KVKey, KVKeyInstance, type KVQuery } from "./key.ts";
-import { KVOperation, KVTransaction } from "./transaction.ts";
+import {
+  KVOperation,
+  KVTransaction,
+  type KVTransactionResult,
+} from "./transaction.ts";
 import { KVLedger } from "./ledger.ts";
 import { SYNC_INTERVAL_MS } from "./constants.ts";
 
 // External dependencies
 import { EventEmitter } from "node:events";
-
-/**
- * Represents a single data entry returned after querying the Key/Value store.
- */
-export interface KVDataEntry {
-  /**
-   * The timestamp (milliseconds since epoch) when the entry was created or modified.
-   */
-  ts: number;
-
-  /**
-   * The actual data stored in the Key-Value store. Can be any type.
-   */
-  data: unknown;
-}
 
 /**
  * Options for configuring the behavior of the KV store.
@@ -230,12 +219,12 @@ export class KV extends EventEmitter {
         for (const entry of newTransactions) {
           try {
             // Apply transaction to the index
-            switch (entry.operation) {
+            switch (entry.transaction.operation) {
               case KVOperation.SET:
-                this.index.add(entry.key, entry.offset);
+                this.index.add(entry.transaction.key!, entry.offset);
                 break;
               case KVOperation.DELETE:
-                this.index.delete(entry.key);
+                this.index.delete(entry.transaction.key!);
                 break;
             }
           } catch (transactionError) {
@@ -339,7 +328,7 @@ export class KV extends EventEmitter {
    * @param key - Representation of the key.
    * @returns A promise that resolves to the retrieved value, or null if not found.
    */
-  public async get(key: KVKey): Promise<KVDataEntry | null> {
+  public async get(key: KVKey): Promise<KVTransactionResult | null> {
     for await (const entry of this.iterate(key, 1)) {
       return entry;
     }
@@ -371,7 +360,7 @@ export class KV extends EventEmitter {
   public async *iterate(
     key: KVQuery,
     limit?: number,
-  ): AsyncGenerator<KVDataEntry> {
+  ): AsyncGenerator<KVTransactionResult> {
     const validatedKey = new KVKeyInstance(key, true);
     const offsets = this.index!.get(validatedKey, limit)!;
 
@@ -381,12 +370,9 @@ export class KV extends EventEmitter {
 
     let count = 0;
     for (const offset of offsets) {
-      const result = await this.ledger?.rawGetTransaction(offset, false, true);
+      const result = await this.ledger?.rawGetTransaction(offset, true);
       if (result?.transaction) {
-        yield {
-          ts: result?.transaction.timestamp!,
-          data: result?.transaction.getData(),
-        };
+        yield result.transaction.asResult();
         count++;
       }
       if (limit && count >= limit) break;
@@ -402,8 +388,8 @@ export class KV extends EventEmitter {
    * @param key - Representation of the key to query.
    * @returns A Promise that resolves to an array of all matching data entries.
    */
-  public async listAll(key: KVQuery): Promise<KVDataEntry[]> {
-    const entries: KVDataEntry[] = [];
+  public async listAll(key: KVQuery): Promise<KVTransactionResult[]> {
+    const entries: KVTransactionResult[] = [];
     for await (const entry of this.iterate(key)) {
       entries.push(entry);
     }
@@ -441,6 +427,11 @@ export class KV extends EventEmitter {
     // Throw if database isn't open
     this.ensureOpen();
 
+    // Throw if there is an ongoing vacuum
+    if (this.blockSync) {
+      throw new Error("Can not add data during vacuuming");
+    }
+
     // Ensure the key is ok
     const validatedKey = new KVKeyInstance(key);
 
@@ -468,6 +459,11 @@ export class KV extends EventEmitter {
   async delete(key: KVKey): Promise<void> {
     // Throw if database isn't open
     this.ensureOpen();
+
+    // Throw if there is an ongoing vacuum
+    if (this.blockSync) {
+      throw new Error("Can not delete data during vacuuming");
+    }
 
     // Ensure the key is ok
     const validatedKey = new KVKeyInstance(key);

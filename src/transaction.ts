@@ -63,6 +63,17 @@ export interface KVTransactionHeader {
 
 export type KVTransactionData = Uint8Array;
 
+/**
+ * Represents a single transaction returned after querying the Key-Value store.
+ */
+export interface KVTransactionResult {
+  key: KVKey;
+  operation: KVOperation;
+  timestamp: number;
+  data: unknown; // Decoded data (any type)
+  hash: Uint8Array; // Hash of the raw data
+}
+
 // Concrete implementation of the KVTransaction interface
 export class KVTransaction {
   public key?: KVKeyInstance;
@@ -190,12 +201,34 @@ export class KVTransaction {
     return fullData;
   }
 
-  public getData(): unknown | null {
+  private getData(): unknown | null {
     // Return data, should be validated through create or fromUint8Array
     if (this.data) {
       return decode(this.data);
     } else {
       return null;
     }
+  }
+
+  /**
+   * Converts the transaction to a KVTransactionResult object.
+   * This assumes that the transaction's data is already validated or created correctly.
+   */
+  public asResult(): KVTransactionResult {
+    if (
+      this.operation === undefined || this.timestamp === undefined ||
+      this.hash === undefined
+    ) {
+      throw new Error(
+        "Incomplete transaction cannot be converted to a result.",
+      );
+    }
+    return {
+      key: this.key!.get() as KVKey,
+      operation: this.operation,
+      timestamp: this.timestamp,
+      data: this.getData(),
+      hash: this.hash,
+    };
   }
 }

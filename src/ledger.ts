@@ -13,7 +13,6 @@ import {
   SUPPORTED_LEDGER_VERSIONS,
 } from "./constants.ts";
 import { KVOperation, KVTransaction } from "./transaction.ts";
-import type { KVKeyInstance } from "./key.ts";
 import { rename, unlink } from "@cross/fs";
 import type { FileHandle } from "node:fs/promises";
 
@@ -33,23 +32,23 @@ import type { FileHandle } from "node:fs/promises";
  * Following the header, is a long list of transactions described in detail in transaction.ts.
  */
 
-export interface KVTransactionMeta {
-  key: KVKeyInstance;
-  operation: KVOperation;
-  offset: number;
-}
-
-interface LedgerHeader {
+interface KVLedgerHeader {
   fileId: string; // "CKVD", 4 bytes
   ledgerVersion: string; // 4 bytes
   created: number;
   currentOffset: number;
 }
 
+interface KVLedgerResult {
+  offset: number;
+  length: number;
+  transaction: KVTransaction;
+}
+
 export class KVLedger {
   private aborted: boolean = false;
   private dataPath: string;
-  public header: LedgerHeader = {
+  public header: KVLedgerHeader = {
     fileId: "CKVD",
     ledgerVersion: "ALPH",
     created: 0,
@@ -90,16 +89,15 @@ export class KVLedger {
    *
    * @returns A Promise resolving to an array of the newly retrieved KVTransaction objects, or null if the ledger is invalidated.
    */
-  public async sync(): Promise<KVTransactionMeta[] | null> {
+  public async sync(): Promise<KVLedgerResult[] | null> {
     if (this.aborted) return [];
 
-    const newTransactions = [] as KVTransactionMeta[];
+    const newTransactions = [] as KVLedgerResult[];
 
     let currentOffset = this.header.currentOffset; // Get from the cached header
     const currentCreated = this.header.created; // Get from the cached header
 
     // Update offset
-    await lock(this.dataPath);
     let reusableFd;
     try {
       await this.readHeader(false);
@@ -107,8 +105,6 @@ export class KVLedger {
       // If the ledger is re-created (by vacuum or overwriting), there will be a time in the cached header
       // and there will be a different time after reading the header
       if (currentCreated !== 0 && currentCreated !== this.header.created) {
-        await unlock(this.dataPath);
-
         // Return 0 to invalidate this ledger
         return null;
       }
@@ -124,14 +120,9 @@ export class KVLedger {
           const result = await this.rawGetTransaction(
             currentOffset,
             false,
-            false,
             reusableFd,
           );
-          newTransactions.push({
-            key: result.transaction.key!,
-            operation: result.transaction.operation!,
-            offset: currentOffset,
-          }); // Add the    transaction
+          newTransactions.push(result); // Add the    transaction
           currentOffset += result.length; // Advance the offset
         } catch (_e) {
           failures++;
@@ -142,7 +133,6 @@ export class KVLedger {
       this.header.currentOffset = currentOffset;
     } finally {
       if (reusableFd) reusableFd.close();
-      await unlock(this.dataPath);
     }
 
     return newTransactions;
@@ -158,7 +148,7 @@ export class KVLedger {
     try {
       fd = await rawOpen(this.dataPath, false);
       const headerData = await readAtPosition(fd, 1024, 0);
-      const decoded: LedgerHeader = {
+      const decoded: KVLedgerHeader = {
         fileId: new TextDecoder().decode(headerData.slice(0, 4)),
         ledgerVersion: new TextDecoder().decode(headerData.slice(4, 8)),
         created: new DataView(headerData.buffer).getFloat64(8, false),
@@ -224,12 +214,15 @@ export class KVLedger {
     doLock: boolean = true,
   ): Promise<number> {
     const offset = this.header.currentOffset;
+
+    // Compose the transaction before locking to reduce lock time
+    const transactionData = await transaction.toUint8Array();
+
     if (doLock) await lock(this.dataPath);
     await this.readHeader(false);
     let fd;
     try {
       fd = await rawOpen(this.dataPath, true);
-      const transactionData = await transaction.toUint8Array();
 
       // Append the transaction data
       await writeAtPosition(
@@ -251,11 +244,9 @@ export class KVLedger {
 
   public async rawGetTransaction(
     offset: number,
-    doLock: boolean = false,
     readData: boolean = true,
     externalFd?: Deno.FsFile | FileHandle,
-  ): Promise<{ offset: number; length: number; transaction: KVTransaction }> {
-    if (doLock) await lock(this.dataPath);
+  ): Promise<KVLedgerResult> {
     let fd = externalFd;
     try {
       if (!externalFd) fd = await rawOpen(this.dataPath, false);
@@ -328,7 +319,6 @@ export class KVLedger {
       };
     } finally {
       if (fd && !externalFd) fd.close();
-      if (doLock) await unlock(this.dataPath);
     }
   }
 
@@ -344,19 +334,18 @@ export class KVLedger {
         const result = await this.rawGetTransaction(
           currentOffset,
           false,
-          false,
         );
         allOffsets.push(currentOffset);
         currentOffset += result.length;
       }
 
       // 3. Gather Valid Transactions (in Reverse Order)
-      const validTransactions: KVTransactionMeta[] = [];
+      const validTransactions: KVLedgerResult[] = [];
       const removedKeys: Set<string> = new Set();
       const addedKeys: Set<string> = new Set();
       for (let i = allOffsets.length - 1; i >= 0; i--) {
         const offset = allOffsets[i];
-        const result = await this.rawGetTransaction(offset, false, false);
+        const result = await this.rawGetTransaction(offset, false);
         if (result.transaction.operation === KVOperation.DELETE) {
           removedKeys.add(result.transaction.key!.getKeyRepresentation());
         } else if (
@@ -364,11 +353,7 @@ export class KVLedger {
           !(addedKeys.has(result.transaction.key?.getKeyRepresentation()!))
         ) {
           addedKeys.add(result.transaction.key!.getKeyRepresentation());
-          validTransactions.push({
-            key: result.transaction.key!,
-            operation: result.transaction.operation!,
-            offset: offset,
-          });
+          validTransactions.push(result);
         }
       }
 
@@ -381,7 +366,6 @@ export class KVLedger {
       for (const validTransaction of validTransactions) {
         const transaction = await this.rawGetTransaction(
           validTransaction.offset,
-          false,
           true,
         );
         await tempLedger.add(transaction.transaction, false);

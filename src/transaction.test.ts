@@ -25,8 +25,8 @@ test("KVTransaction: create and toUint8Array", async () => {
   assertEquals(decodedTransaction.operation, transaction.operation);
   assertEquals(decodedTransaction.timestamp, transaction.timestamp);
 
-  const decodedData = decodedTransaction.getData();
-  assertEquals(decodedData, value);
+  const result = decodedTransaction.asResult();
+  assertEquals(result.data, value);
 });
 
 test("KVTransaction: headerFromUint8Array - invalid data", () => {

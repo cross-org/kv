@@ -1,8 +1,9 @@
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { test } from "@cross/test";
-import { KV, type KVDataEntry, type KVOptions } from "./kv.ts";
+import { KV, type KVOptions } from "./kv.ts";
 import { tempfile } from "@cross/fs";
 import { SYNC_INTERVAL_MS } from "./constants.ts";
+import type { KVTransactionResult } from "./transaction.ts";
 
 test("KV: set, get and delete (numbers and strings)", async () => {
   const tempFilePrefix = await tempfile();
@@ -251,7 +252,7 @@ test("KV: iteration with limit", async () => {
 
   // Iterate with a limit of 3
   const limit = 3;
-  const results: KVDataEntry[] = [];
+  const results: KVTransactionResult[] = [];
   for await (const entry of kvStore.iterate(["data"], limit)) {
     results.push(entry);
   }
