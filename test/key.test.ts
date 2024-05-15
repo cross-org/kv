@@ -1,6 +1,10 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { test } from "@cross/test";
-import { type KVKey, KVKeyInstance, /* ... */ type KVQuery } from "./key.ts";
+import {
+  type KVKey,
+  KVKeyInstance,
+  /* ... */ type KVQuery,
+} from "../src/key.ts";
 
 test("KVKeyInstance: constructs with valid string key", () => {
   const key = new KVKeyInstance(["users", "user123"]);

@@ -1,5 +1,5 @@
 import { tempfile } from "@cross/fs";
-import { KV } from "./kv.ts";
+import { KV } from "../src/kv.ts";
 
 const DATABASE_FILE_CROSS = await tempfile();
 const DATABASE_FILE_DENO = await tempfile();

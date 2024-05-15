@@ -1,9 +1,9 @@
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { test } from "@cross/test";
-import { KV, type KVOptions } from "./kv.ts";
+import { KV, type KVOptions } from "../src/kv.ts";
 import { tempfile } from "@cross/fs";
-import { SYNC_INTERVAL_MS } from "./constants.ts";
-import type { KVTransactionResult } from "./transaction.ts";
+import { SYNC_INTERVAL_MS } from "../src/constants.ts";
+import type { KVTransactionResult } from "../src/transaction.ts";
 
 test("KV: set, get and delete (numbers and strings)", async () => {
   const tempFilePrefix = await tempfile();

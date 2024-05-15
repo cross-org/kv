@@ -4,7 +4,13 @@ import { KV_KEY_ALLOWED_CHARS } from "./constants.ts";
  * Represents a range within a query.
  */
 export interface KVQueryRange {
+  /**
+   * Start key (inclusive) - Optional
+   */
   from?: string | number;
+  /**
+   * End key (inclusive) - Optional
+   */
   to?: string | number;
 }
 

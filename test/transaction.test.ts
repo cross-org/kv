@@ -1,7 +1,7 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { test } from "@cross/test";
-import { KVKeyInstance } from "./key.ts";
-import { KVOperation, KVTransaction } from "./transaction.ts";
+import { KVKeyInstance } from "../src/key.ts";
+import { KVOperation, KVTransaction } from "../src/transaction.ts";
 
 test("KVTransaction: create and toUint8Array", async () => {
   const key = new KVKeyInstance(["testKey"]);

@@ -130,14 +130,14 @@ await kvStore.close();
   - `async get(key)` - Retrieves a value.
   - `async *iterate(query)` - Iterates over entries for a key.
   - `async listAll(query)` - Gets all entries for a key as an array.
-  - `delete(key)` - Deletes a key-value pair.
+  - `async delete(key)` - Deletes a key-value pair.
   - `beginTransaction()` - Starts a transaction.
   - `async endTransaction()` - Ends a transaction, returns a list of `Errors` if
     any occurred.
   - `async vacuum()` - Reclaims storage space.
   - `on(eventName, eventData)` - Listen for events such as `sync`,
     `watchdogError` or `closing`.
-  - `close()` - Closes the KV store.
+  - `async close()` - Closes the KV store.
 
 ### Keys
 
@@ -244,9 +244,13 @@ kvStore.on("sync", (eventData) => {
 });
 ```
 
-## **Contributing**
+## Contributing
 
 Contributions are welcome! Feel free to open issues or submit pull requests.
+
+The task `deno task check` runs all tests, and is a good pre-commit check.
+`deno task check-coverage` do require `genhtml` available through the `lcov`
+package in most distributions.
 
 ## **License**
 

@@ -31,8 +31,17 @@ import { decode, encode } from "cbor-x";
  * - Number Element Data: Number Value (float64)
  */
 
+/**
+ * Enumerates the possible operations that can be performed on a key-value pair in the KV store.
+ */
 export enum KVOperation {
+  /**
+   * The operation of setting or updating the value associated with a key.
+   */
   SET = 1,
+  /**
+   * The operation of removing a key-value pair from the store.
+   */
   DELETE = 2,
 }
 
@@ -64,14 +73,36 @@ export interface KVTransactionHeader {
 export type KVTransactionData = Uint8Array;
 
 /**
- * Represents a single transaction returned after querying the Key-Value store.
+ * Represents a single transaction result from the Key-Value store.
  */
 export interface KVTransactionResult {
+  /**
+   * The key associated with the transaction.
+   */
   key: KVKey;
+
+  /**
+   * The operation performed (KVOperation.SET or KVOperation.DELETE).
+   */
   operation: KVOperation;
+
+  /**
+   * The timestamp of the operation (in milliseconds since the Unix epoch).
+   */
   timestamp: number;
-  data: unknown; // Decoded data (any type)
-  hash: Uint8Array; // Hash of the raw data
+
+  /**
+   * The decoded data associated with the transaction (if any).
+   * For SET operations, this will be the value that was set.
+   * For DELETE operations, this will typically be null or undefined.
+   */
+  data: unknown;
+
+  /**
+   * The hash of the raw transaction data. This can be used for
+   * verification and integrity checks.
+   */
+  hash: Uint8Array;
 }
 
 // Concrete implementation of the KVTransaction interface

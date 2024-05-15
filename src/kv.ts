@@ -55,8 +55,10 @@ export class KV extends EventEmitter {
 
   // Configuration
   private ledgerPath?: string;
-  public autoSync: boolean = true; // Public only to allow testing
-  public syncIntervalMs: number = SYNC_INTERVAL_MS; // Public only to allow testing
+  /** Public only for testing purposes */
+  public autoSync: boolean = true;
+  /** Public only for testing purposes */
+  public syncIntervalMs: number = SYNC_INTERVAL_MS;
 
   // States
   private blockSync: boolean = false; // Syncing can be blocked during vacuum
@@ -65,6 +67,13 @@ export class KV extends EventEmitter {
   private watchdogTimer?: number; // Undefined if not scheduled or currently running
   private watchdogPromise?: Promise<void>;
 
+  /**
+   * Initializes a new instance of the cross/kv main class `KV`.
+   *
+   * @param options - The configuration options for the KV store.
+   *
+   * @throws {Error} If any of the provided options are invalid (e.g., negative `syncIntervalMs`).
+   */
   constructor(options: KVOptions = {}) {
     super();
 
@@ -518,13 +527,21 @@ export class KV extends EventEmitter {
     }
   }
 
+  /**
+   * Closes the database gracefully.
+   *
+   * 1. Waits for any ongoing watchdog task to complete.
+   * 2. Emits a 'closing' event to notify listeners.
+   * 3. Closes the associated ledger.
+   */
   public async close() {
-    // First await current watchdog run
-    await this.watchdogPromise;
-    // @ts-ignore Closing ledger
-    this.emit("closing");
     this.aborted = true;
-    clearTimeout(this.watchdogTimer!); // Clear the timer if it exists
+    await this.watchdogPromise;
+    clearTimeout(this.watchdogTimer!);
+
+    // @ts-ignore emit exists
+    this.emit("closing");
+
     this.ledger?.close();
   }
 }
