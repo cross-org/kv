@@ -172,7 +172,8 @@ including:
 ### Queries
 
 Queries are basically keys, but with additional support for ranges, which are
-objects like `{ from: 5, to: 20 }` or `{ from: "a", to: "l" }`. An empty range (`{}`) means any document.
+objects like `{ from: 5, to: 20 }` or `{ from: "a", to: "l" }`. An empty range
+(`{}`) means any document.
 
 **Example queries**
 
