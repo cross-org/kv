@@ -13,10 +13,10 @@ test("KVTransaction: create and toUint8Array", async () => {
 
   const uint8Array = transaction.toUint8Array();
   const decodedTransaction = new KVTransaction();
-  const headerLength = new DataView(uint8Array.buffer).getUint32(0);
+  const headerLength = new DataView(uint8Array.buffer).getUint32(3);
   decodedTransaction.headerFromUint8Array(
-    uint8Array.slice(8, 8 + headerLength),
-  ); // Skip the initial 8 bytes (header and data lengths)
+    uint8Array.slice(8 + 3, 8 + 3 + headerLength),
+  ); // Skip the initial 11 bytes (signature, header and data lengths)
   await decodedTransaction.dataFromUint8Array(transaction.data!);
   assertEquals(
     decodedTransaction.key?.getKeyRepresentation(),

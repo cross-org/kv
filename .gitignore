@@ -35,9 +35,10 @@ bunfig.toml
 
 # Local
 lab/
+local/
 lab.ts
+local.ts
 mydatabase*/
-stress-test/
 
 # Pup data
 .pup

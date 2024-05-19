@@ -20,4 +20,4 @@ jobs:
     with:
       jsr_dependencies: "@cross/test @cross/fs @cross/runtime @std/assert@0.224.0 @std/path@0.224.0"
       npm_dependencies: "cbor-x"
-      test_target: "src/*.test.ts"
+      test_target: "test/*.test.ts"

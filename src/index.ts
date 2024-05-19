@@ -3,7 +3,7 @@ import type { KVKeyInstance, KVQueryRange } from "./key.ts";
 /**
  * Represents content of a node within the KVIndex tree.
  */
-interface KVIndexContent {
+export interface KVIndexContent {
   /**
    * Holds references to child nodes in the index.
    */
@@ -144,5 +144,29 @@ export class KVIndex {
     recurse(this.index, 0);
 
     return resultSet;
+  }
+
+  /**
+   * Retrieves the child keys of a given key.
+   *
+   * @param key - The key (or null for root level).
+   * @returns An array of child keys at the next level.
+   */
+  public getChildKeys(key: KVKeyInstance | null): string[] {
+    let currentNode: KVIndexContent | undefined = this.index;
+
+    // Navigate to the node of the provided key (or root)
+    if (key !== null) {
+      const keyParts = key.get();
+      for (const part of keyParts) {
+        currentNode = currentNode.children.get(part as (string | number));
+        if (!currentNode) {
+          return []; // Key not found, no children
+        }
+      }
+    }
+
+    // Return the keys at the next level
+    return Array.from(currentNode.children.keys()).map(String);
   }
 }

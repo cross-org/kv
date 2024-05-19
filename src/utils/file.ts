@@ -5,7 +5,7 @@ import { dirname, isAbsolute, join, resolve } from "@std/path";
 import {
   LOCK_DEFAULT_INITIAL_RETRY_INTERVAL_MS,
   LOCK_DEFAULT_MAX_RETRIES,
-  LOCK_STALE_TIMEOUT_S,
+  LOCK_STALE_TIMEOUT_MS,
 } from "../constants.ts";
 
 export function toAbsolutePath(filename: string): string {
@@ -83,7 +83,7 @@ export async function lock(filePath: string): Promise<boolean> {
     const statResult = await stat(lockFile);
     if (
       statResult?.mtime &&
-      Date.now() - statResult.mtime.getTime() > LOCK_STALE_TIMEOUT_S
+      Date.now() - statResult.mtime.getTime() > LOCK_STALE_TIMEOUT_MS
     ) {
       await unlink(lockFile);
     }

@@ -129,8 +129,10 @@ await kvStore.close();
   - `async set(key, value)` - Stores a value.
   - `async get(key)` - Retrieves a value.
   - `async *iterate(query)` - Iterates over entries for a key.
+  - `listKeys(query)` - List all keys under <query>.
   - `async listAll(query)` - Gets all entries for a key as an array.
   - `async delete(key)` - Deletes a key-value pair.
+  - `async sync()` - Synchronizez the ledger with disk.
   - `beginTransaction()` - Starts a transaction.
   - `async endTransaction()` - Ends a transaction, returns a list of `Errors` if
     any occurred.
@@ -192,54 +194,65 @@ objects like `{ from: 5, to: 20 }` or `{ from: "a", to: "l" }`. An empty range
 ["products", "book", {}, "author"]
 ```
 
-## Multi-Process Synchronization
+## Concurrency
 
-`cross/kv` has a built in mechanism for synchronizing the in-memory index with
-the transaction ledger, allowing for multiple processes to work with the same
-database simultanously. Due to the append-only design of the ledger, each
-process can update it's internal state by reading everything after the last
-processed transaction. An internal watchdog actively checks for new transactions
-and updates the in-memory index accordingly. The synchnization frequency can be
-controlled by the option `syncIntervalMs`, which defaults to `1000` (1 second).
+`cross/kv` has a built-in mechanism for synchronizing the in-memory index with
+the transaction ledger, allowing multiple processes to work with the same
+database simultaneously.
 
-In single process scenarios, the watchdog can be disabled by setting the
-`autoSync` option to `false`.
+Due to the append-only design of the ledger, each process can update its
+internal state by reading all new transactions appended since the last processed
+transaction.
 
-Subscribe to the `sync` event to receive notifications about synchronization
-results and potential errors.
+### Single-Process Synchronization
+
+In single-process scenarios, explicit synchronization is unnecessary. You can
+disable automatic synchronization by setting the `autoSync` option to false, and
+do not have to care about running `.sync()`. This can improve performance when
+only one process is accessing the database.
+
+### Multi-Process Synchronisation
+
+In multi-process scenarios, synchronization is crucial to ensure data
+consistency across different processes. `cross/kv` manages synchronization in
+the following ways:
+
+- **Automatic Index Synchronization:** The index is automatically synchronized
+  at a set interval (default: 1000ms), ensuring that changes made by other
+  processes are reflected in all instances within a maximum of `syncIntervalMs`
+  milliseconds. You can adjust this interval using the `syncIntervalMs` option.
+
+- **Manual Synchronization for Reads:** When reading data, you have two options:
+
+  - **Accept Potential Inconsistency:** By default, reads do not trigger an
+    immediate synchronization, which can lead to a small window of inconsistency
+    if another process has recently written to the database. This is generally
+    acceptable for most use cases.
+
+  - **Force Synchronization:** For strict consistency, you can manually trigger
+    synchronization before reading using the `.sync()` method:
+
+  ```ts
+  await kv.sync(); // Ensure the most up-to-date data
+  const result = await kv.get(["my", "key"]); // Now read with confidence
+  ```
+
+### Monitoring Synchronization Events
+
+You can subscribe to the `sync` event to receive notifications about
+synchronization results and potential errors:
 
 ```typescript
 const kvStore = new KV();
 await kvStore.open("./mydatabase/");
 
-// Subscribe to sync events for monitoring
 kvStore.on("sync", (eventData) => {
   switch (eventData.result) {
-    case "ready":
-      console.log("Everything is up to date.");
-      break;
-    case "blocked":
-      console.warn(
-        "Synchronization is temporarily blocked (e.g., during vacuum).",
-      );
-      break;
-    case "success":
-      console.log(
-        "Synchronization completed successfully, new transactions added to the index.",
-      );
-      break;
-    case "ledgerInvalidated":
-      console.warn(
-        "Ledger invalidated! The database hash been reopened and the index resynchronized to maintain consistency.",
-      );
-      break;
-    case "error":
-      // Error Handling
-      console.error("Synchronization error:", eventData.error);
-      // Log the error, report it, or take appropriate action.
-      break;
-    default:
-      console.warn("Unknown sync result:", eventData.result);
+    case "ready": // No new updates
+    case "blocked": // Synchronization temporarily blocked (e.g., during vacuum)
+    case "success": // Synchronization successful, new transactions added
+    case "ledgerInvalidated": // Ledger recreated, database reopened and index resynchronized
+    case "error": // An error occurred during synchronization
   }
 });
 ```

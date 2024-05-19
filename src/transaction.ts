@@ -1,12 +1,14 @@
 import { compareHash, sha1 } from "./utils/hash.ts";
 import { type KVKey, KVKeyInstance } from "./key.ts";
 import { decode, encode } from "cbor-x";
+import { TRANSACTION_SIGNATURE } from "./constants.ts";
 
 /**
  * Data structure of a Cross/kv transaction:
  *
- * | Header Length (uint32) | Data Length (uint32) | Header Bytes... | Data Bytes... |
+ * Header signature (3 bytes) | Header Length (uint32) | Data Length (uint32) | Header Bytes... | Data Bytes... |
  *
+ * - Header Signature: Three bytes "CKT" designating the start of a Cross KV Transaction, and is primarily used to fast forward past corrupted data.
  * - Header Length: Specifies the length of the transaction header in bytes.
  * - Data Length: Specifies the length of the transaction data in bytes.
  * - Header Bytes: Contains metadata about the transaction (detailed below).
@@ -199,17 +201,21 @@ export class KVTransaction {
     const dataLength = pendingTransactionData
       ? pendingTransactionData.length
       : 0;
-    const fullDataSize = 4 + 4 + headerSize + dataLength;
+    const fullDataSize = 3 + 4 + 4 + headerSize + dataLength;
 
     const fullData = new Uint8Array(fullDataSize);
     const fullDataView = new DataView(fullData.buffer);
 
+    // Encode transaction signature
+    const signature = new TextEncoder().encode(TRANSACTION_SIGNATURE);
+    fullData.set(signature, 0);
+
     // Encode header and data lengths
-    fullDataView.setUint32(0, headerSize, false);
-    fullDataView.setUint32(4, dataLength, false);
+    fullDataView.setUint32(3, headerSize, false);
+    fullDataView.setUint32(7, dataLength, false);
 
     // Encode key bytes
-    let offset = 8; // Start after length fields
+    let offset = 3 + 4 + 4; // Start after length fields
     fullData.set(keyBytes, offset);
     offset += keyBytes.length;
 

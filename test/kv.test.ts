@@ -23,6 +23,35 @@ test("KV: set, get and delete (numbers and strings)", async () => {
   await kvStore.close();
 });
 
+test("KV: set, get and delete (numbers and strings, without sync)", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+  const kvStore2 = new KV();
+  await kvStore2.open(tempFilePrefix);
+  await kvStore.set(["name"], "Alice");
+  await kvStore.set(["age"], 30);
+  assertEquals((await kvStore2.get(["name"]))?.data, undefined);
+  assertEquals((await kvStore2.get(["age"]))?.data, undefined);
+  await kvStore.close();
+  await kvStore2.close();
+});
+
+test("KV: set, get and delete (numbers and strings, with sync)", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+  const kvStore2 = new KV();
+  await kvStore2.open(tempFilePrefix);
+  await kvStore.set(["name"], "Alice");
+  await kvStore.set(["age"], 30);
+  await kvStore2.sync();
+  assertEquals((await kvStore2.get(["name"]))?.data, "Alice");
+  assertEquals((await kvStore2.get(["age"]))?.data, 30);
+  await kvStore.close();
+  await kvStore2.close();
+});
+
 test("KV: set, get and delete (big numbers)", async () => {
   const tempFilePrefix = await tempfile();
   const kvStore = new KV();
@@ -91,12 +120,10 @@ test("KV: throws when trying to delete a non-existing key", async () => {
   const tempFilePrefix = await tempfile();
   const kvStore = new KV();
   await kvStore.open(tempFilePrefix);
-
   await assertRejects(
     async () => await kvStore.delete(["unknownKey"]),
     Error,
   ); // We don't have a specific error type for this yet
-
   await kvStore.close();
 });
 
@@ -227,6 +254,7 @@ test("KV: transaction with multiple operations", async () => {
   const kvStore = new KV();
   await kvStore.open(tempFilePrefix);
 
+  await kvStore.set(["user", "address"], "Space");
   kvStore.beginTransaction();
   await kvStore.set(["user", "name"], "Alice");
   await kvStore.set(["user", "age"], 30);
@@ -354,4 +382,38 @@ test("KV Options: throws on zero syncIntervalMs", () => {
     TypeError,
     "Invalid option: syncIntervalMs must be a positive integer",
   );
+});
+
+test("KV: sync event triggers and reflects data changes", async () => {
+  const tempFilePrefix = await tempfile();
+
+  // Two KV instances sharing the same file
+  const kvStore1 = new KV();
+  const kvStore2 = new KV(); // Manual sync for testing
+  await kvStore1.open(tempFilePrefix);
+  await kvStore2.open(tempFilePrefix);
+
+  let syncedData: KVTransactionResult[] = [];
+
+  // Listen for the "sync" event on the second instance
+  kvStore2.on("sync", async (result) => {
+    if (result.result === "success") {
+      syncedData = await kvStore2.listAll(["user"]); // Fetch all data after successful sync
+    }
+  });
+
+  // Add data using the first instance
+  await kvStore1.set(["user", "name"], "Bob");
+  await kvStore1.set(["user", "age"], 42);
+
+  // Wait for the watchdog interval to ensure a sync occurs
+  await new Promise((resolve) => setTimeout(resolve, SYNC_INTERVAL_MS * 2)); // Autosync should have happened within 2 sec
+
+  // Assert that the second instance has the updated data
+  assertEquals(syncedData.length, 2);
+  assertEquals(syncedData[0].data, "Bob");
+  assertEquals(syncedData[1].data, 42);
+
+  await kvStore1.close();
+  await kvStore2.close();
 });

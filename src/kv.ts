@@ -15,6 +15,31 @@ import { SYNC_INTERVAL_MS } from "./constants.ts";
 import { EventEmitter } from "node:events";
 
 /**
+ * Represents the status of a synchronization operation between the in-memory index and the on-disk ledger.
+ */
+export type KVSyncResultStatus =
+  | "noop" // No operation was performed (e.g., ledger not open)
+  | "ready" // The database is ready, no new data
+  | "blocked" // Synchronization is blocked (e.g., during a vacuum)
+  | "success" // The database is ready, new data were synchronized
+  | "ledgerInvalidated" // The ledger was invalidated and needs to be reopened
+  | "error"; // An error occurred during synchronization, check .error for details
+
+/**
+ * The result of a synchronization operation between the in-memory index and the on-disk ledger.
+ */
+export interface KVSyncResult {
+  /**
+   * Indicates the status of the synchronization operation.
+   */
+  result: KVSyncResultStatus;
+  /**
+   * If an error occurred during synchronization, this property will contain the Error object. Otherwise, it will be null.
+   */
+  error: Error | null;
+}
+
+/**
  * Options for configuring the behavior of the KV store.
  */
 export interface KVOptions {
@@ -129,7 +154,10 @@ export class KV extends EventEmitter {
 
     // Do the initial synchronization
     // - If `this.autoSync` is enabled, additional synchronizations will be carried out every `this.syncIntervalMs`
-    await this.sync(true);
+    const syncResult = await this.sync(true);
+    if (syncResult.error) {
+      throw syncResult.error;
+    }
   }
 
   /**
@@ -182,83 +210,102 @@ export class KV extends EventEmitter {
   /**
    * Synchronizes the in-memory index with the on-disk ledger.
    *
-   * This method fetches new transactions from the ledger and applies them to the index.
-   * If the ledger is invalidated, it automatically re-opens the database.
+   * - Automatically run on a specified interval (if autoSync option is enabled)
+   * - Automatically run on adding data
+   * - Can be manually triggered for full consistency before data retrieval (iterate(), listAll(), get())
    *
-   * @param force - If true, forces synchronization even if it's currently blocked (e.g., during a vacuum).
+   * @param force - (Optional) If true, forces synchronization even if currently blocked (e.g., vacuum). For internal use only.
+   * @param doLock - (Optional) Locks the database before synchronization. Defaults to true. Always true unless called internally.
    *
-   * @emits sync - Emits an event with the synchronization result. The event detail object has the following structure:
-   *   - `result`: <string representing success state> | "error"
+   * @emits sync - Emits an event with the synchronization result:
+   *   - `result`: "ready" | "blocked" | "success" | "ledgerInvalidated" | "error"
    *   - `error`: Error object (if an error occurred) or null
    *
    * @throws {Error} If an unexpected error occurs during synchronization.
    */
-  private async sync(force: boolean = false) {
-    // Early returns
-    if (!this.ledger || this.ledger?.isClosing()) return;
-    if (this.aborted) return;
-    if (this.blockSync && !force) {
-      // @ts-ignore .emit does indeed exist
-      this.emit("sync", { result: "blocked", error: errorDetails });
-      return;
+  public async sync(force = false, doLock = true): Promise<KVSyncResult> {
+    // Throw if database isn't open
+    this.ensureOpen();
+
+    // Ensure ledger is open and instance is not closed
+    if (this.ledger?.isClosing() || this.aborted) {
+      const error = new Error(
+        this.aborted ? "Store is closed" : "Ledger is not open",
+      );
+      return { result: "noop", error }; // Emit noop since no sync was performed
     }
 
-    let syncResult:
-      | "ready"
-      | "blocked"
-      | "success"
-      | "ledgerInvalidated"
-      | "error" = "ready";
-    let errorDetails: Error | null = null;
+    if (this.blockSync && !force) {
+      const error = new Error("Store synchronization is blocked");
+      // @ts-ignore .emit exists
+      this.emit("sync", { result: "blocked", error });
+      return { result: "blocked", error };
+    }
+
+    // Synchronization Logic (with lock if needed)
+    let result: KVSyncResult["result"] = "ready";
+    let error: Error | null = null;
 
     try {
+      if (doLock) await this.ledger?.lock();
+
       const newTransactions = await this.ledger?.sync();
-      // If sync() do return null the ledger is invalidated
-      // - Return without rescheduling the watchdog, and open the new ledger
-      if (newTransactions === null) {
-        // @ts-ignore .emit does indeed exist
-        syncResult = "ledgerInvalidated";
-        await this.open(this.ledgerPath!, false);
-      } else if (newTransactions) {
-        // Change status to success if there are new transactions
-        if (newTransactions.length > 0) {
-          syncResult = "success";
-        }
-        // Handle each new transactionx
-        for (const entry of newTransactions) {
-          try {
-            // Apply transaction to the index
-            switch (entry.transaction.operation) {
-              case KVOperation.SET:
-                this.index.add(entry.transaction.key!, entry.offset);
-                break;
-              case KVOperation.DELETE:
-                this.index.delete(entry.transaction.key!);
-                break;
+
+      if (newTransactions === null) { // Ledger invalidated
+        result = "ledgerInvalidated";
+        await this.open(this.ledgerPath!, false); // Reopen ledger
+      } else {
+        result = newTransactions?.length ? "success" : "ready"; // Success if new transactions exist
+
+        if (newTransactions) {
+          for (const entry of newTransactions) {
+            try {
+              this.applyTransactionToIndex(entry.transaction, entry.offset); // Refactored for clarity
+            } catch (transactionError) {
+              result = "error";
+              error = new Error("Error processing transaction", {
+                cause: transactionError,
+              });
+              break; // Stop processing on transaction error
             }
-          } catch (transactionError) {
-            // Change result to error
-            syncResult = "error";
-            errorDetails = new Error(
-              "Error processing transaction: " + transactionError.message,
-              { cause: transactionError },
-            );
-            // @ts-ignore .emit does indeed exist
-            this.emit("sync", { result: syncResult, error: errorDetails });
           }
         }
-      } else {
-        throw new Error("Undefined error during ledger sync");
       }
     } catch (syncError) {
-      syncResult = "error";
-      errorDetails = new Error(
-        "Error during ledger sync: " + syncError.message,
-        { cause: syncError },
-      );
+      result = "error";
+      error = new Error("Error during ledger sync", { cause: syncError });
     } finally {
-      // @ts-ignore .emit does indeed exist
-      this.emit("sync", { result: syncResult, error: errorDetails });
+      if (doLock) await this.ledger?.unlock();
+      // @ts-ignore .emit exists
+      this.emit("sync", { result, error });
+    }
+
+    return { result, error };
+  }
+
+  /**
+   * Applies a transaction to the in-memory index.
+   *
+   * This method updates the index based on the operation specified in the transaction.
+   *
+   * @param transaction - The transaction to apply.
+   * @param offset - The offset of the transaction within the ledger.
+   *
+   * @throws {Error} If the database is not open or if the transaction operation is unsupported.
+   */
+  private applyTransactionToIndex(transaction: KVTransaction, offset: number) {
+    // Throw if database isn't open
+    this.ensureOpen();
+
+    switch (transaction.operation) {
+      case KVOperation.SET:
+        this.index.add(transaction.key!, offset);
+        break;
+      case KVOperation.DELETE:
+        this.index.delete(transaction.key!);
+        break;
+      default:
+        throw new Error(`Unsupported operation: ${transaction.operation}`); // Handle unknown operations explicitly
     }
   }
 
@@ -275,6 +322,9 @@ export class KV extends EventEmitter {
    * @async
    */
   public async vacuum(): Promise<void> {
+    // Throw if database isn't open
+    this.ensureOpen();
+
     this.blockSync = true;
     await this.ledger?.vacuum();
 
@@ -288,6 +338,9 @@ export class KV extends EventEmitter {
    * @throws {Error} If already in a transaction.
    */
   public beginTransaction() {
+    // Throw if database isn't open
+    this.ensureOpen();
+
     if (this.isInTransaction) throw new Error("Already in a transaction");
     this.isInTransaction = true;
   }
@@ -299,6 +352,9 @@ export class KV extends EventEmitter {
    *                             encountered during transaction execution (empty if successful).
    */
   public async endTransaction(): Promise<Error[]> {
+    // Throw if database isn't open
+    this.ensureOpen();
+
     if (!this.isInTransaction) throw new Error("Not in a transaction");
 
     // Run transactions
@@ -326,7 +382,7 @@ export class KV extends EventEmitter {
    * @throws {Error} If the database is not open.
    */
   private ensureOpen(): void {
-    if (!this.ledger) {
+    if (!this.ledger || this.ledger.isClosing()) {
       throw new Error("Database not open");
     }
   }
@@ -338,6 +394,9 @@ export class KV extends EventEmitter {
    * @returns A promise that resolves to the retrieved value, or null if not found.
    */
   public async get(key: KVKey): Promise<KVTransactionResult | null> {
+    // Throw if database isn't open
+    this.ensureOpen();
+
     for await (const entry of this.iterate(key, 1)) {
       return entry;
     }
@@ -370,6 +429,9 @@ export class KV extends EventEmitter {
     key: KVQuery,
     limit?: number,
   ): AsyncGenerator<KVTransactionResult> {
+    // Throw if database isn't open
+    this.ensureOpen();
+
     const validatedKey = new KVKeyInstance(key, true);
     const offsets = this.index!.get(validatedKey, limit)!;
 
@@ -398,6 +460,9 @@ export class KV extends EventEmitter {
    * @returns A Promise that resolves to an array of all matching data entries.
    */
   public async listAll(key: KVQuery): Promise<KVTransactionResult[]> {
+    // Throw if database isn't open
+    this.ensureOpen();
+
     const entries: KVTransactionResult[] = [];
     for await (const entry of this.iterate(key)) {
       entries.push(entry);
@@ -418,6 +483,9 @@ export class KV extends EventEmitter {
    * @remarks
    */
   public count(key: KVQuery): number {
+    // Throw if database isn't open
+    this.ensureOpen();
+
     const validatedKey = new KVKeyInstance(key, true);
     const offsets = this.index.get(validatedKey);
     return offsets?.length ?? 0;
@@ -463,27 +531,29 @@ export class KV extends EventEmitter {
   /**
    * Deletes the key-value pair with the given key.
    * @param key - Representation of the key.
-   * @throws {Error} If the key is not found.
+   * @throws {Error} If the key is not found in the index, or if the database or ledger file is closed.
    */
   async delete(key: KVKey): Promise<void> {
-    // Throw if database isn't open
-    this.ensureOpen();
+    this.ensureOpen(); // Throw if the database isn't open
 
-    // Throw if there is an ongoing vacuum
     if (this.blockSync) {
-      throw new Error("Can not delete data during vacuuming");
+      throw new Error("Cannot delete data during vacuuming");
     }
 
-    // Ensure the key is ok
     const validatedKey = new KVKeyInstance(key);
 
-    // Create transaction
+    // Ensure the key exists in the index by performing a sync
+    await this.sync();
+
+    // Check if the key exists in the index after the sync
+    const keyExistsInIndex = this.index.get(validatedKey, 1);
+
+    if (!keyExistsInIndex.length) {
+      throw new Error("Key not found");
+    }
+
     const pendingTransaction = new KVTransaction();
-    pendingTransaction.create(
-      validatedKey,
-      KVOperation.DELETE,
-      Date.now(),
-    );
+    pendingTransaction.create(validatedKey, KVOperation.DELETE, Date.now());
 
     if (!this.isInTransaction) {
       await this.runTransaction(pendingTransaction);
@@ -503,28 +573,41 @@ export class KV extends EventEmitter {
     pendingTransaction: KVTransaction,
   ): Promise<void> {
     this.ensureOpen();
+    await this.ledger!.lock();
+    try {
+      // Always do a complete sync before a transaction
+      // - This will ensure that the index is is up to date, and that new
+      //   transactions are added reflected to listeners.
+      // - Throw on any error
+      const syncResult = await this.sync(false, false);
+      if (syncResult.error) throw syncResult.error;
 
-    const offset = await this.ledger!.add(pendingTransaction);
-
-    if (offset) {
-      switch (pendingTransaction.operation) {
-        case KVOperation.SET:
-          this.index.add(
-            pendingTransaction.key!,
-            offset,
-          );
-          break;
-        case KVOperation.DELETE: {
-          const deletedReference = this.index.delete(pendingTransaction.key!);
-          if (deletedReference === undefined) {
-            throw new Error("Could not delete entry, key not found.");
-          }
-          break;
-        }
+      // Add the transaction to the ledger
+      const offset = await this.ledger!.add(pendingTransaction);
+      if (offset) {
+        this.applyTransactionToIndex(pendingTransaction, offset);
+      } else {
+        throw new Error("Transaction failed, no data written.");
       }
-    } else {
-      throw new Error("Transaction failed, no data written.");
+    } finally {
+      await this.ledger!.unlock();
     }
+  }
+
+  /**
+   * Lists the immediate child keys under a given key, or lists all root keys if `null` is provided.
+   *
+   * @param key - The parent key for which to retrieve child keys. If `null`, lists all root keys.
+   * @returns An array of strings representing the immediate child keys.
+   *          If the key doesn't exist or has no children, an empty array is returned.
+   */
+  public listKeys(key: KVKey | null): string[] {
+    // Throw if database isn't open
+    this.ensureOpen();
+
+    return this.index.getChildKeys(
+      key === null ? null : new KVKeyInstance(key, true),
+    );
   }
 
   /**

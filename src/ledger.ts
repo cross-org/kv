@@ -13,6 +13,7 @@ import {
   LEDGER_MAX_READ_FAILURES,
   LEDGER_PREFETCH_BYTES,
   SUPPORTED_LEDGER_VERSIONS,
+  TRANSACTION_SIGNATURE,
 } from "./constants.ts";
 import { KVOperation, KVTransaction } from "./transaction.ts";
 import { rename, unlink } from "@cross/fs";
@@ -23,7 +24,7 @@ import type { FileHandle } from "node:fs/promises";
  *
  * The file structure consists of an 1024 byte header:
  *
- * | File ID (4 bytes) | Ledger Version (4 bytes) | Created Timestamp (float64) | Current Offset (uint32) | (Header padding...) | (Transactions...)
+ * | File ID (4 bytes) | Ledger Version (4 bytes) | Created Timestamp (4 bytes) | Current Offset (8 bytes) | (Header padding...) | (Transactions...)
  *
  * - File ID: A fixed string "CKVD" to identify the file type.
  * - Ledger Version: A string indicating the ledger version (e.g., "ALPH" for alpha).
@@ -89,10 +90,12 @@ export class KVLedger {
    * Synchronizes the ledger with the underlying file, retrieving any new
    * transactions that have been added since the last sync.
    *
+   * The result of this function need to be picked up, and transfered to the in-memory index.
+   *
    * @returns A Promise resolving to an array of the newly retrieved KVTransaction objects, or null if the ledger is invalidated.
    */
   public async sync(): Promise<KVLedgerResult[] | null> {
-    if (this.aborted) return [];
+    this.ensureOpen();
 
     const newTransactions = [] as KVLedgerResult[];
 
@@ -102,7 +105,7 @@ export class KVLedger {
     // Update offset
     let reusableFd;
     try {
-      await this.readHeader(false);
+      await this.readHeader();
 
       // If the ledger is re-created (by vacuum or overwriting), there will be a time in the cached header
       // and there will be a different time after reading the header
@@ -116,7 +119,8 @@ export class KVLedger {
       let failures = 0;
       while (currentOffset < this.header.currentOffset) {
         if (failures > LEDGER_MAX_READ_FAILURES) {
-          throw new Error("Internal sync error: Read attempts exceeded");
+          // Recover
+          currentOffset++;
         }
         try {
           const result = await this.rawGetTransaction(
@@ -126,26 +130,29 @@ export class KVLedger {
           );
           newTransactions.push(result); // Add the    transaction
           currentOffset += result.length; // Advance the offset
+          failures = 0;
         } catch (_e) {
           failures++;
         }
       }
-
       // Update the cached header's currentOffset
       this.header.currentOffset = currentOffset;
     } finally {
       if (reusableFd) reusableFd.close();
     }
-
     return newTransactions;
   }
 
   /**
    * Reads the header from the ledger file.
+   *
+   * - This should ONLY be carried out by the KVLedger.sync() function
+   *   as it can update the internal offset
+   *
    * @throws If the header is invalid or cannot be read.
    */
-  public async readHeader(doLock: boolean = true) {
-    if (doLock) await lock(this.dataPath);
+  public async readHeader() {
+    this.ensureOpen();
     let fd;
     try {
       fd = await rawOpen(this.dataPath, false);
@@ -174,12 +181,11 @@ export class KVLedger {
       this.header = decoded;
     } finally {
       if (fd) fd.close();
-      if (doLock) await unlock(this.dataPath);
     }
   }
 
-  public async writeHeader(doLock: boolean = true) {
-    if (doLock) await lock(this.dataPath);
+  public async writeHeader() {
+    this.ensureOpen();
     let fd;
     try {
       fd = await rawOpen(this.dataPath, true);
@@ -207,21 +213,25 @@ export class KVLedger {
       await writeAtPosition(fd, new Uint8Array(headerBuffer), 0);
     } finally {
       if (fd) fd.close();
-      if (doLock) await unlock(this.dataPath);
     }
   }
 
+  /**
+   * Adds a transaction to the ledger.
+   *
+   * This MUST be invoked directly after a full sync, to ensure consistency.
+   * This MUST be done in a locked state, to ensure consistency.
+   * Updates the current offset in the internal header, and re-writes the header to disk.
+   */
   public async add(
     transaction: KVTransaction,
-    doLock: boolean = true,
   ): Promise<number> {
+    this.ensureOpen();
+
     // Compose the transaction before locking to reduce lock time
     const transactionData = await transaction.toUint8Array();
 
-    if (doLock) await lock(this.dataPath);
-
-    // Update internal offset
-    await this.readHeader(false);
+    // It is implied that a sync operation has been carried out since last database lock
     const offset = this.header.currentOffset;
 
     let fd;
@@ -238,10 +248,9 @@ export class KVLedger {
       // Update the current offset in the header
       this.header.currentOffset += transactionData.length;
 
-      await this.writeHeader(false); // Update header with new offset
+      await this.writeHeader(); // Update header with new offset
     } finally {
       if (fd) fd.close();
-      if (doLock) await unlock(this.dataPath);
     }
     return offset;
   }
@@ -251,30 +260,34 @@ export class KVLedger {
     readData: boolean = true,
     externalFd?: Deno.FsFile | FileHandle,
   ): Promise<KVLedgerResult> {
+    this.ensureOpen();
     let fd = externalFd;
     try {
       if (!externalFd) fd = await rawOpen(this.dataPath, false);
-      // Fetch 4 + 4 bytes for header length and data length, also prefetch additional LEDGER_PREFETCH_BYTES bytes to avoid duplicate reads
+
+      // Fetch 3 + 4 + 4 bytes (signature, header length, data length) + prefetch
       const transactionLengthData = await readAtPosition(
         fd!,
-        8 + LEDGER_PREFETCH_BYTES,
+        3 + 8 + LEDGER_PREFETCH_BYTES, // Updated to include 3 bytes for signature
         offset,
       );
       const transactionLengthDataView = new DataView(
         transactionLengthData.buffer,
       );
 
-      // Read header length
-      const headerLength = transactionLengthDataView.getUint32(
-        0,
-        false,
+      // Read and validate the CKT signature
+      const signature = new TextDecoder().decode(
+        transactionLengthData.slice(0, 3),
       );
+      if (signature !== TRANSACTION_SIGNATURE) {
+        throw new Error("Invalid transaction signature");
+      }
 
-      // Read data length
-      const dataLength = transactionLengthDataView.getUint32(
-        4,
-        false,
-      );
+      // Read header length (offset by 3 bytes for signature)
+      const headerLength = transactionLengthDataView.getUint32(3, false);
+
+      // Read data length (offset by 3 bytes for signature)
+      const dataLength = transactionLengthDataView.getUint32(7, false);
 
       const transaction = new KVTransaction();
 
@@ -282,43 +295,43 @@ export class KVLedger {
       let transactionHeaderData;
 
       // - directly from file
-      if (headerLength + 8 > LEDGER_PREFETCH_BYTES) {
+      if (headerLength + 3 + 8 > LEDGER_PREFETCH_BYTES) {
         transactionHeaderData = await readAtPosition(
           fd!,
           headerLength,
-          offset + 8,
+          offset + 3 + 8,
         );
         transaction.headerFromUint8Array(transactionHeaderData);
         // - from pre-fetched data
       } else {
         transaction.headerFromUint8Array(
-          transactionLengthData.subarray(8, headerLength + 8),
+          transactionLengthData.subarray(3 + 8, headerLength + 3 + 8),
         );
       }
 
       // Read transaction data (optional)
       if (readData) {
         // Directly from file
-        if (headerLength + 8 + dataLength > LEDGER_PREFETCH_BYTES) {
+        if (headerLength + 3 + 8 + dataLength > LEDGER_PREFETCH_BYTES) {
           const transactionData = await readAtPosition(
             fd!,
             dataLength,
-            offset + 8 + headerLength,
+            offset + 3 + 8 + headerLength,
           );
           await transaction.dataFromUint8Array(transactionData);
           // From pre-fetched data
         } else {
           await transaction.dataFromUint8Array(
             transactionLengthData.slice(
-              headerLength + 8,
-              headerLength + 8 + dataLength,
+              headerLength + 3 + 8,
+              headerLength + 3 + 8 + dataLength,
             ),
           );
         }
       }
       return {
         offset: offset,
-        length: 4 + 4 + dataLength + headerLength,
+        length: 3 + 4 + 4 + dataLength + headerLength, // Include 3 bytes for signature
         transaction,
       };
     } finally {
@@ -326,9 +339,12 @@ export class KVLedger {
     }
   }
 
+  /**
+   * Caution should be taken not to carry out any other operations during a vacuum
+   */
   public async vacuum() {
     // 1. Lock for Exclusive Access
-    await lock(this.dataPath);
+    await this.lock();
 
     try {
       // 2. Gather All Transaction Offsets
@@ -372,7 +388,7 @@ export class KVLedger {
           validTransaction.offset,
           true,
         );
-        await tempLedger.add(transaction.transaction, false);
+        await tempLedger.add(transaction.transaction);
       }
       this.header.currentOffset = tempLedger.header.currentOffset;
       tempLedger.close();
@@ -382,14 +398,26 @@ export class KVLedger {
       await rename(tempFilePath + ".data", this.dataPath);
 
       // 6. Update the Cached Header
-      await this.readHeader(false);
+      await this.readHeader();
     } finally {
       // 7. Unlock
-      await unlock(this.dataPath);
+      await this.unlock();
     }
   }
 
   public isClosing() {
     return this.aborted;
+  }
+
+  private ensureOpen(): void {
+    if (this.aborted) throw new Error("Ledger is closed.");
+  }
+
+  public async lock(): Promise<void> {
+    this.ensureOpen();
+    await lock(this.dataPath);
+  }
+  public async unlock(): Promise<void> {
+    await unlock(this.dataPath);
   }
 }
