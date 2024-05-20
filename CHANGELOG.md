@@ -1,3 +1,9 @@
+## 0.12.0
+
+- Use a header flag instead of separate file to lock/unlock database
+- Update ledger version `B011`->`B012` with backwards compatibility
+- Implement atomic transactions
+
 ## 0.11.0
 
 - Update ledger version `BETA`->`B011` "Beta 0.11"

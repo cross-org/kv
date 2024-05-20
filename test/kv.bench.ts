@@ -27,39 +27,47 @@ let crossIter = 0;
 let denoIter = 0;
 
 await Deno.bench("cross_kv_set", async () => {
-  await crossStore.set(["testKey", crossIter++], {
-    data: {
-      data: "testData",
-      more: {
-        "test": "data",
-        "with1": new Date(),
-        "with2": new Date(),
-        "with3": new Date(),
-        "with4": new Date(),
-        "with5": new Date(),
-        "with6": new Date(),
+  await crossStore.beginTransaction();
+  for (let i = 0; i < 100; i++) {
+    await crossStore.set(["testKey", crossIter++], {
+      data: {
+        data: "testData",
+        more: {
+          "test": "data",
+          "with1": new Date(),
+          "with2": new Date(),
+          "with3": new Date(),
+          "with4": new Date(),
+          "with5": new Date(),
+          "with6": new Date(),
+        },
+        ts: new Date(),
       },
-      ts: new Date(),
-    },
-  });
+    });
+  }
+  await crossStore.endTransaction();
 });
 
 await Deno.bench("deno_kv_set", async () => {
-  await denoStore.set(["testKey", denoIter++], {
-    data: {
-      data: "testData",
-      more: {
-        "test": "data",
-        "with1": new Date(),
-        "with2": new Date(),
-        "with3": new Date(),
-        "with4": new Date(),
-        "with5": new Date(),
-        "with6": new Date(),
+  const at = denoStore.atomic();
+  for (let i = 0; i < 100; i++) {
+    at.set(["testKey", denoIter++], {
+      data: {
+        data: "testData",
+        more: {
+          "test": "data",
+          "with1": new Date(),
+          "with2": new Date(),
+          "with3": new Date(),
+          "with4": new Date(),
+          "with5": new Date(),
+          "with6": new Date(),
+        },
+        ts: new Date(),
       },
-      ts: new Date(),
-    },
-  });
+    });
+  }
+  await at.commit();
 });
 
 await Deno.bench("cross_kv_get", async () => {

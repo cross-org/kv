@@ -3,29 +3,51 @@
 [![JSR](https://jsr.io/badges/@cross/kv)](https://jsr.io/@cross/kv)
 [![JSR Score](https://jsr.io/badges/@<scope>/@cross/kv)](https://jsr.io/@cross/kv)
 
-A cross-platform, in-memory indexed and file based Key/Value database for
-JavaScript and TypeScript, designed for seamless multi-process access and
-compatibility across Node.js, Deno, and Bun.
+An in-memory indexed and file based Key/Value database for JavaScript and
+TypeScript, designed for seamless multi-process access and compatibility across
+Node.js, Deno, and Bun.
 
-_Please note that `cross/kv` is currently in **beta**. The API and features are
-starting to stabilize, but are still subject to change._
+```typescript
+import { KV } from "@cross/kv";
+
+// Create an instance
+const db = new KV();
+await db.open("data/mydatabase.db");
+
+// Listen for new interests
+db.watch(["users", {}, "interests"], (data) => {
+  console.log(data);
+});
+
+// Store some values/documents indexed by users.<id>.<category>
+await db.set(["users", 1, "contact"], {
+  name: "Bob",
+});
+await db.set(["users", 1, "interests"], {
+  description: "Fishing",
+});
+
+// Display all contact information connected to users with id < 10
+console.log(await db.listAll(["users", { to: 10 }, "contact"]));
+
+db.close();
+```
 
 ## Features
 
-- **Indexed Key/Value Storage**: Store and retrieve data easily using
-  hierarchical keys, with an in-memory index to provide fast lookups of large
-  datasets.
-- **Transaction-Based Storage:** Uses a single append-only transaction ledger to
-  store data, ensuring durability and recoverability.
-- **Vacuuming:** Supports vacuuming the ledger to reclaim disk space used by
-  deletion transactions and deleted documents.
-- **Multi-Process Support**: Multiple processes can safely access and modify the
-  same database concurrently, index updates are distributed automatically.
-- **Cross-Runtime Compatibility:** Works in Node.js, Deno and Bun.
-- **Flexible Data Types**: Store any JavaScript object, including complex types
-  like Maps and Sets.
-- **Key Ranges:** Retrieve ranges of data efficiently directly from the index
-  using key ranges.
+- **Efficient Key-Value Storage:** Rapid storage and retrieval using
+  hierarchical keys and a high-performance in-memory index.
+- **Durable Transactions:** Ensure data integrity and recoverability through an
+  append-only transaction ledger.
+- **Atomic Transactions:** Guarantee data consistency by grouping multiple
+  operations into a single, indivisible unit.
+- **Optimized Storage:** Reclaim disk space and maintain performance through
+  vacuuming operations.
+- **Cross-Platform & Multi-Process:** Built in pure TypeScript, working
+  seamlessly across Node.js, Deno, and Bun, supporting concurrent access by
+  multiple processes.
+- **Flexible & Customizable:** Store any JavaScript object, subscribe to data
+  changes, and fine-tune synchronization behavior.
 
 ## Installation
 
@@ -40,87 +62,6 @@ deno add @cross/kv
 
 # Using bun
 bunx jsr add @cross/kv
-```
-
-## Simple Usage
-
-```typescript
-import { KV } from "@cross/kv";
-
-const kvStore = new KV();
-
-// Open the database, path and database is created if it does not exist
-await kvStore.open("data/mydatabase.db");
-
-// Set a value
-await kvStore.set(["data", "username"], "Alice");
-
-// Get a value
-const username = await kvStore.get(["data", "username"]);
-console.log(username); // Output: { ts: <numeric timestamp>, data "Alice" }
-
-// Delete a key
-await kvStore.delete(["data", "username"]);
-
-// Close the database
-await kvStore.close();
-```
-
-## Advanced Usage
-
-```typescript
-import { KV } from "@cross/kv";
-
-// Create an instance
-const kvStore = new KV();
-
-// Open the database
-await kvStore.open("data/mydatabase.db");
-
-// Store some values/documents indexed by users.by_id.<id>
-await kvStore.set(["users", "by_id", 1], {
-  name: "Bob",
-  created: new Date(),
-  interests: new Set(["fishing", "hunting"]),
-});
-await kvStore.set(["users", "by_id", 2], {
-  name: "Alice",
-  created: new Date(),
-  interests: new Set(["singing", "hunting"]),
-});
-await kvStore.set(["users", "by_id", 3], {
-  name: "Ben",
-  created: new Date(),
-  interests: new Set(["singing", "fishing"]),
-});
-await kvStore.set(["users", "by_id", 4], {
-  name: "Lisa",
-  created: new Date(),
-  interests: new Set(["reading", "fighting"]),
-});
-await kvStore.set(["users", "by_id", 5], {
-  name: "Jan",
-  created: new Date(),
-  interests: new Set(["cooking", "fighting"]),
-});
-
-// Use the index to select users between 2 and 4
-const query = ["users", "by_id", { from: 2, to: 4 }];
-// ... will display Document count: 3
-console.log("Document count: " + kvStore.count(query));
-// ... will output the objects of Alice, Ben and Lisa
-for await (const entry of kvStore.iterate(query)) {
-  console.log(entry);
-}
-
-// Use a plain JavaScript filter (less performant) to find a user named ben
-const ben = (await kvStore.listAll(["users"])).filter((user) =>
-  user.data.name === "Ben"
-);
-console.log("Ben: ", ben); // Outputs the object of Ben
-
-// Make sure the in-memory database is in sync with storage
-await kvStore.close();
 ```
 
 ## API Documentation
@@ -143,9 +84,9 @@ await kvStore.close();
     database.
   - `unwatch(query, callback): void` - Unregisters a previously registered watch
     handler.
-  - `beginTransaction()` - Starts a transaction.
-  - `async endTransaction()` - Ends a transaction, returns a list of `Errors` if
-    any occurred.
+  - `beginTransaction()` - Starts an atomic transaction.
+  - `async endTransaction()` - Ends an atomic transaction, returns a list of
+    `Errors` if any occurred.
   - `async vacuum()` - Reclaims storage space.
   - `on(eventName, eventData)` - Listen for events such as `sync`,
     `watchdogError` or `closing`.

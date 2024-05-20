@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
 import { test } from "@cross/test";
 import { KV, type KVOptions } from "../src/kv.ts";
 import { tempfile } from "@cross/fs";
@@ -114,17 +114,6 @@ test("KV: set, get and delete (dates)", async () => {
   await kvStore.delete(["pointintime"]);
   assertEquals(await kvStore.get(["pointintime"]), null);
 
-  await kvStore.close();
-});
-
-test("KV: throws when trying to delete a non-existing key", async () => {
-  const tempFilePrefix = await tempfile();
-  const kvStore = new KV();
-  await kvStore.open(tempFilePrefix);
-  await assertRejects(
-    async () => await kvStore.delete(["unknownKey"]),
-    Error,
-  ); // We don't have a specific error type for this yet
   await kvStore.close();
 });
 

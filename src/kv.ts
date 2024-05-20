@@ -373,36 +373,6 @@ export class KV extends EventEmitter {
   }
 
   /**
-   * Ends the current transaction, executing all pending operations.
-   *
-   * @returns {Promise<Error[]>} A promise resolving to an array of errors
-   *                             encountered during transaction execution (empty if successful).
-   */
-  public async endTransaction(): Promise<Error[]> {
-    // Throw if database isn't open
-    this.ensureOpen();
-
-    if (!this.isInTransaction) throw new Error("Not in a transaction");
-
-    // Run transactions
-    let p = this.pendingTransactions.pop();
-    const errors: Error[] = [];
-    while (p) {
-      try {
-        await this.runTransaction(p);
-      } catch (e) {
-        errors.push(e);
-      }
-      p = this.pendingTransactions.pop();
-    }
-
-    // Done
-    this.isInTransaction = false;
-
-    return errors;
-  }
-
-  /**
    * Ensures the database is open, throwing an error if it's not.
    *
    * @private
@@ -549,7 +519,12 @@ export class KV extends EventEmitter {
 
     // Enqueue transaction
     if (!this.isInTransaction) {
-      await this.runTransaction(transaction);
+      this.beginTransaction();
+      this.pendingTransactions.push(transaction);
+      const result = await this.endTransaction();
+      if (result.length) {
+        throw result[0];
+      }
     } else {
       this.pendingTransactions.push(transaction);
     }
@@ -569,56 +544,94 @@ export class KV extends EventEmitter {
 
     const validatedKey = new KVKeyInstance(key);
 
-    // Ensure the key exists in the index by performing a sync
-    await this.sync();
-
-    // Check if the key exists in the index after the sync
-    const keyExistsInIndex = this.index.get(validatedKey, 1);
-
-    if (!keyExistsInIndex.length) {
-      throw new Error("Key not found");
-    }
-
     const pendingTransaction = new KVTransaction();
     pendingTransaction.create(validatedKey, KVOperation.DELETE, Date.now());
 
     if (!this.isInTransaction) {
-      await this.runTransaction(pendingTransaction);
+      this.beginTransaction();
+      this.pendingTransactions.push(pendingTransaction);
+      const result = await this.endTransaction();
+      if (result.length) {
+        throw result[0];
+      }
     } else {
       this.pendingTransactions.push(pendingTransaction);
     }
   }
 
   /**
-   * Processes a single transaction and updates the index and data files.
+   * Ends the current transaction, executing all pending operations in a batched write.
    *
-   * @param pendingTransaction - The transaction to execute.
+   * @returns {Promise<Error[]>} A promise resolving to an array of errors encountered during transaction execution (empty if successful).
    *
-   * @throws {Error} If the transaction fails or if there's an issue updating the index or data files.
+   * @throws {Error} If not in a transaction or if the database is not open.
    */
-  private async runTransaction(
-    pendingTransaction: KVTransaction,
-  ): Promise<void> {
+  public async endTransaction(): Promise<Error[]> {
     this.ensureOpen();
+    if (!this.isInTransaction) throw new Error("Not in a transaction");
+
+    const bufferedTransactions: {
+      transaction: KVTransaction;
+      relativeOffset: number;
+    }[] = [];
+    const errors: Error[] = [];
+
+    // Prepare transaction data and offsets
+    let currentOffset = 0;
+    for (const transaction of this.pendingTransactions) {
+      const transactionData = await transaction.toUint8Array();
+      bufferedTransactions.push({ transaction, relativeOffset: currentOffset });
+      currentOffset += transactionData.length;
+    }
+
     await this.ledger!.lock();
     try {
-      // Always do a complete sync before a transaction
-      // - This will ensure that the index is is up to date, and that new
-      //   transactions are added reflected to listeners.
-      // - Throw on any error
+      // Sync before writing the transactions
       const syncResult = await this.sync(false, false);
-      if (syncResult.error) throw syncResult.error;
+      if (syncResult.error) {
+        throw syncResult.error;
+      }
 
-      // Add the transaction to the ledger
-      const offset = await this.ledger!.add(pendingTransaction);
-      if (offset) {
-        this.applyTransactionToIndex(pendingTransaction, offset);
-      } else {
-        throw new Error("Transaction failed, no data written.");
+      // Convert buffered transactions to Uint8Array[]
+      const transactionsData = bufferedTransactions.map(({ transaction }) =>
+        transaction.toUint8Array()
+      );
+
+      // Write all buffered transactions at once and get the base offset
+      const baseOffset = await this.ledger!.add(transactionsData);
+
+      // Update the index and check for errors
+      for (const { transaction, relativeOffset } of bufferedTransactions) {
+        try {
+          this.applyTransactionToIndex(
+            transaction,
+            baseOffset + relativeOffset,
+          );
+        } catch (error) {
+          errors.push(error as Error);
+        }
       }
     } finally {
       await this.ledger!.unlock();
+      this.pendingTransactions = []; // Clear pending transactions
+      this.isInTransaction = false;
     }
+
+    return errors;
+  }
+
+  /**
+   * Aborts the current transaction, discarding all pending operations.
+   *
+   * @throws {Error} If not in a transaction or if the database is not open.
+   */
+  public abortTransaction(): void {
+    this.ensureOpen();
+    if (!this.isInTransaction) throw new Error("Not in a transaction");
+
+    // Clear pending transactions
+    this.pendingTransactions = [];
+    this.isInTransaction = false;
   }
 
   /**

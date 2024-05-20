@@ -114,6 +114,7 @@ export class KVTransaction {
   public timestamp?: number;
   public data?: Uint8Array;
   public hash?: Uint8Array;
+  public fullData?: Uint8Array;
   constructor() {
   }
 
@@ -183,6 +184,10 @@ export class KVTransaction {
    * Return a Uint8Array consisting of data length (uint32) plus the actual data
    */
   public toUint8Array(): Uint8Array {
+    if (this.fullData) {
+      return this.fullData;
+    }
+
     const keyBytes = this.key!.toUint8Array();
     const hashBytes = this.hash;
     const pendingTransactionData = this.data;
@@ -231,6 +236,8 @@ export class KVTransaction {
     if (pendingTransactionData) {
       fullData.set(pendingTransactionData, offset);
     }
+
+    this.fullData = fullData;
 
     return fullData;
   }

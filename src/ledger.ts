@@ -5,15 +5,20 @@ import {
   toAbsolutePath,
   writeAtPosition,
 } from "./utils/file.ts";
-import { lock, unlock } from "./utils/file.ts";
 import {
   LEDGER_BASE_OFFSET,
   LEDGER_CURRENT_VERSION,
   LEDGER_FILE_ID,
   LEDGER_MAX_READ_FAILURES,
   LEDGER_PREFETCH_BYTES,
+  LOCK_BYTE_OFFSET,
+  LOCK_DEFAULT_INITIAL_RETRY_INTERVAL_MS,
+  LOCK_DEFAULT_MAX_RETRIES,
+  LOCK_STALE_TIMEOUT_MS,
+  LOCKED_BYTES_LENGTH,
   SUPPORTED_LEDGER_VERSIONS,
   TRANSACTION_SIGNATURE,
+  UNLOCKED_BYTES,
 } from "./constants.ts";
 import { KVOperation, KVTransaction } from "./transaction.ts";
 import { rename, unlink } from "@cross/fs";
@@ -217,42 +222,32 @@ export class KVLedger {
   }
 
   /**
-   * Adds a transaction to the ledger.
+   * Adds multiple transactions to the ledger at once.
    *
    * This MUST be invoked directly after a full sync, to ensure consistency.
    * This MUST be done in a locked state, to ensure consistency.
-   * Updates the current offset in the internal header, and re-writes the header to disk.
+
+   * @param transactionsData An array of raw transaction data as Uint8Arrays.
+   * @returns The base offset where the transactions were written.
    */
-  public async add(
-    transaction: KVTransaction,
-  ): Promise<number> {
+  public async add(transactionsData: Uint8Array[]): Promise<number> {
     this.ensureOpen();
-
-    // Compose the transaction before locking to reduce lock time
-    const transactionData = await transaction.toUint8Array();
-
-    // It is implied that a sync operation has been carried out since last database lock
-    const offset = this.header.currentOffset;
-
+    const baseOffset = this.header.currentOffset;
     let fd;
     try {
       fd = await rawOpen(this.dataPath, true);
+      for (const transactionData of transactionsData) {
+        // Append each transaction data
+        await writeAtPosition(fd, transactionData, this.header.currentOffset);
 
-      // Append the transaction data
-      await writeAtPosition(
-        fd,
-        transactionData,
-        this.header.currentOffset,
-      );
-
-      // Update the current offset in the header
-      this.header.currentOffset += transactionData.length;
-
-      await this.writeHeader(); // Update header with new offset
+        // Update the current offset in the header
+        this.header.currentOffset += transactionData.length;
+      }
+      await this.writeHeader(); // Update header with the new offset
     } finally {
       if (fd) fd.close();
     }
-    return offset;
+    return baseOffset;
   }
 
   public async rawGetTransaction(
@@ -402,7 +397,7 @@ export class KVLedger {
           validTransaction.offset,
           true,
         );
-        await tempLedger.add(transaction.transaction);
+        await tempLedger.add([transaction.transaction.toUint8Array()]);
       }
       this.header.currentOffset = tempLedger.header.currentOffset;
       tempLedger.close();
@@ -429,9 +424,68 @@ export class KVLedger {
 
   public async lock(): Promise<void> {
     this.ensureOpen();
-    await lock(this.dataPath);
+
+    let fd;
+    const retryInterval = LOCK_DEFAULT_INITIAL_RETRY_INTERVAL_MS; // Use provided retry interval
+
+    for (let attempt = 0; attempt < LOCK_DEFAULT_MAX_RETRIES; attempt++) {
+      try {
+        fd = await rawOpen(this.dataPath, true);
+
+        // 1. Check if already locked
+        const lockData = await readAtPosition(
+          fd,
+          LOCKED_BYTES_LENGTH,
+          LOCK_BYTE_OFFSET,
+        );
+        const existingTimestamp = new DataView(lockData.buffer).getBigUint64(
+          0,
+          false,
+        );
+
+        // Check for stale lock
+        if (
+          existingTimestamp !== BigInt(0) &&
+          Date.now() - Number(existingTimestamp) > LOCK_STALE_TIMEOUT_MS
+        ) {
+          await writeAtPosition(fd, UNLOCKED_BYTES, LOCK_BYTE_OFFSET); // Remove stale lock
+        } else if (existingTimestamp !== BigInt(0)) {
+          // File is locked, wait and retry
+          await new Promise((resolve) =>
+            setTimeout(resolve, retryInterval + attempt * retryInterval)
+          );
+          continue;
+        }
+
+        // 2. Prepare lock data
+        const lockBytes = new Uint8Array(LOCKED_BYTES_LENGTH);
+        const lockView = new DataView(lockBytes.buffer);
+        lockView.setBigUint64(0, BigInt(Date.now()), false);
+
+        // 3. Write lock data
+        await writeAtPosition(fd, lockBytes, LOCK_BYTE_OFFSET);
+
+        // Lock acquired!
+        return;
+      } finally {
+        if (fd) fd.close();
+      }
+    }
+
+    // Could not acquire the lock after retries
+    throw new Error("Could not acquire database lock");
   }
+
   public async unlock(): Promise<void> {
-    await unlock(this.dataPath);
+    await this.ensureOpen();
+    let fd;
+    try {
+      fd = await rawOpen(this.dataPath, true);
+
+      // Write all zeros to the lock bytes
+      await writeAtPosition(fd, UNLOCKED_BYTES, LOCK_BYTE_OFFSET);
+    } finally {
+      if (fd) fd.close();
+    }
   }
 }
