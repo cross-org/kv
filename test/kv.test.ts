@@ -4,6 +4,7 @@ import { KV, type KVOptions } from "../src/kv.ts";
 import { tempfile } from "@cross/fs";
 import { SYNC_INTERVAL_MS } from "../src/constants.ts";
 import type { KVTransactionResult } from "../src/transaction.ts";
+import type { KVQuery } from "../mod.ts";
 
 test("KV: set, get and delete (numbers and strings)", async () => {
   const tempFilePrefix = await tempfile();
@@ -396,6 +397,7 @@ test("KV: sync event triggers and reflects data changes", async () => {
   let syncedData: KVTransactionResult[] = [];
 
   // Listen for the "sync" event on the second instance
+  // @ts-ignore ksStore2 is an EventEmitter
   kvStore2.on("sync", async (result) => {
     if (result.result === "success") {
       syncedData = await kvStore2.listAll(["user"]); // Fetch all data after successful sync
@@ -416,4 +418,135 @@ test("KV: sync event triggers and reflects data changes", async () => {
 
   await kvStore1.close();
   await kvStore2.close();
+});
+
+test("KV: watch functionality - basic matching", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV({ autoSync: false });
+  await kvStore.open(tempFilePrefix);
+
+  const watchedKey = ["user", "profile"];
+  let receivedTransaction: KVTransactionResult | null = null;
+
+  // Watch for a specific key
+  kvStore.watch(watchedKey, (transaction) => {
+    receivedTransaction = transaction;
+  });
+
+  await kvStore.set(watchedKey, { name: "Alice", age: 30 });
+  await kvStore.sync(true); // Manual sync to trigger the watch callback
+
+  assertEquals(receivedTransaction!.key, watchedKey);
+  assertEquals(receivedTransaction!.data, { name: "Alice", age: 30 });
+
+  await kvStore.close();
+});
+
+test("KV: watch functionality - recursive matching", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV({ autoSync: false });
+  await kvStore.open(tempFilePrefix);
+
+  const receivedTransactions: KVTransactionResult[] = [];
+
+  const query: KVQuery = ["users"];
+
+  kvStore.watch(query, (transaction) => {
+    receivedTransactions.push(transaction);
+  }, true);
+
+  await kvStore.set(["users", "user1"], "Alice");
+  await kvStore.set(["users", "user2"], "Bob");
+  await kvStore.set(["data", "other"], "Not watched");
+  await kvStore.sync(true); // Not needed, but trigger to ensure no duplicate calls occurr
+
+  assertEquals(receivedTransactions.length, 2);
+  assertEquals(receivedTransactions[0].data, "Alice");
+  assertEquals(receivedTransactions[1].data, "Bob");
+
+  await kvStore.close();
+});
+
+test("KV: watch functionality - range matching", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV({ autoSync: false });
+  await kvStore.open(tempFilePrefix);
+
+  const receivedTransactions: KVTransactionResult[] = [];
+
+  kvStore.watch(["scores", { from: 10, to: 20 }], (transaction) => {
+    receivedTransactions.push(transaction);
+  });
+
+  await kvStore.set(["scores", 5], 5);
+  await kvStore.set(["scores", 15], 15);
+  await kvStore.set(["scores", 25], 25);
+
+  assertEquals(receivedTransactions.length, 1);
+  assertEquals(receivedTransactions[0].data, 15);
+
+  await kvStore.close();
+});
+
+test("KV: watch functionality - unwatch", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV({ autoSync: false });
+  await kvStore.open(tempFilePrefix);
+
+  let callbackCallCount = 0;
+  const callback = () => {
+    callbackCallCount++;
+  };
+  const query = ["test"];
+  kvStore.watch(query, callback);
+  await kvStore.set(["test"], "Hello");
+  assertEquals(callbackCallCount, 1); // Callback should have been called once
+
+  const unwatchResult0 = kvStore.unwatch(["test"], callback); // Same key but different ref
+  assertEquals(unwatchResult0, false);
+  const unwatchResult = kvStore.unwatch(query, callback); // Correct
+  assertEquals(unwatchResult, true);
+  const unwatchResult2 = kvStore.unwatch(["nonexistant"], callback); // Other
+  assertEquals(unwatchResult2, false);
+  await kvStore.set(["test"], "World");
+  assertEquals(callbackCallCount, 1);
+
+  await kvStore.close();
+});
+
+test("KV: list keys", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV({ autoSync: false });
+  await kvStore.open(tempFilePrefix);
+
+  await kvStore.set(["user", "profile", "name"], "Alice");
+  await kvStore.set(["user", "profile", "age"], 30);
+  await kvStore.set(["user", "settings", "theme"], "dark");
+  await kvStore.set(["system", "version"], 1.0);
+
+  assertEquals(kvStore.listKeys(null), ["user", "system"]);
+  assertEquals(kvStore.listKeys(["user"]), ["profile", "settings"]);
+  assertEquals(kvStore.listKeys(["user", "profile"]), ["name", "age"]);
+  assertEquals(kvStore.listKeys(["nonexistent"]), []);
+
+  await kvStore.close();
+});
+
+test("KV: watch functionality - no match", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV({ autoSync: false });
+  await kvStore.open(tempFilePrefix);
+
+  let callbackCalled = false;
+  kvStore.watch(["users"], () => {
+    callbackCalled = true;
+  });
+
+  // Add data under a different key
+  await kvStore.set(["data", "something"], "else");
+  await kvStore.sync(true);
+
+  assertEquals(callbackCalled, false, "Callback should not have been called");
+
+  await kvStore.close();
 });

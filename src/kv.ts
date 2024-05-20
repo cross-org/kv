@@ -18,12 +18,12 @@ import { EventEmitter } from "node:events";
  * Represents the status of a synchronization operation between the in-memory index and the on-disk ledger.
  */
 export type KVSyncResultStatus =
-  | "noop" // No operation was performed (e.g., ledger not open)
-  | "ready" // The database is ready, no new data
-  | "blocked" // Synchronization is blocked (e.g., during a vacuum)
-  | "success" // The database is ready, new data were synchronized
-  | "ledgerInvalidated" // The ledger was invalidated and needs to be reopened
-  | "error"; // An error occurred during synchronization, check .error for details
+  | "noop" /** No operation was performed (e.g., ledger not open). */
+  | "ready" /** The database is ready, no new data to synchronize. */
+  | "blocked" /** Synchronization is temporarily blocked (e.g., during a vacuum). */
+  | "success" /** Synchronization completed successfully, new data was added. */
+  | "ledgerInvalidated" /** The ledger was invalidated and needs to be reopened. */
+  | "error"; /** An error occurred during synchronization. Check the `error` property for details. */
 
 /**
  * The result of a synchronization operation between the in-memory index and the on-disk ledger.
@@ -37,6 +37,24 @@ export interface KVSyncResult {
    * If an error occurred during synchronization, this property will contain the Error object. Otherwise, it will be null.
    */
   error: Error | null;
+}
+
+/**
+ * A function that is called when a watched transaction occurs.
+ */
+export interface WatchHandler {
+  /**
+   * The query used to filter the transactions.
+   */
+  query: KVQuery;
+  /**
+   * The callback function that will be called when a transaction matches the query.
+   */
+  callback: (transaction: KVTransactionResult) => void;
+  /**
+   * Whether to include child keys
+   */
+  recursive: boolean;
 }
 
 /**
@@ -77,6 +95,7 @@ export class KV extends EventEmitter {
   private index: KVIndex = new KVIndex();
   private ledger?: KVLedger;
   private pendingTransactions: KVTransaction[] = [];
+  private watchHandlers: WatchHandler[] = [];
 
   // Configuration
   private ledgerPath?: string;
@@ -297,6 +316,14 @@ export class KV extends EventEmitter {
     // Throw if database isn't open
     this.ensureOpen();
 
+    // Check for matches in watch handlers
+    for (const handler of this.watchHandlers) {
+      if (transaction.key!.matchesQuery(handler.query, handler.recursive)) {
+        handler.callback(transaction.asResult());
+      }
+    }
+
+    // Add the transaction to index
     switch (transaction.operation) {
       case KVOperation.SET:
         this.index.add(transaction.key!, offset);
@@ -608,6 +635,42 @@ export class KV extends EventEmitter {
     return this.index.getChildKeys(
       key === null ? null : new KVKeyInstance(key, true),
     );
+  }
+
+  /**
+   * Registers a callback function to be called whenever a new transaction matching the given query is added to the database.
+   *
+   * @param query - The query to match against new transactions.
+   * @param callback - The callback function to be called when a match is found. The callback will receive the matching transaction as its argument.
+   */
+  public watch(
+    query: KVQuery,
+    callback: (transaction: KVTransactionResult) => void,
+    recursive: boolean = false,
+  ) {
+    this.watchHandlers.push({ query, callback, recursive });
+  }
+
+  /**
+   * Unregisters a previously registered watch handler.
+   *
+   * Both query and callback must be a reference to the original values passed to `.watch()`
+   *
+   * @param query - The original query or handlerused to register the watch handler.
+   * @param callback - The callback function used to register the watch handler.
+   *
+   * @returns True on success
+   */
+  public unwatch(
+    query: KVQuery,
+    callback: (transaction: KVTransactionResult) => void,
+  ): boolean {
+    const newWatchHandlers = this.watchHandlers.filter(
+      (handler) => handler.query !== query || handler.callback !== callback,
+    );
+    const result = newWatchHandlers.length !== this.watchHandlers.length;
+    this.watchHandlers = newWatchHandlers;
+    return result;
   }
 
   /**

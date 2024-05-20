@@ -76,7 +76,7 @@ export async function readAtPosition(
  */
 export async function lock(filePath: string): Promise<boolean> {
   const retryInterval = LOCK_DEFAULT_INITIAL_RETRY_INTERVAL_MS;
-  const lockFile = filePath + ".lock";
+  const lockFile = filePath + "-lock";
 
   // Remove stale lockfile
   try {
@@ -127,7 +127,7 @@ export async function lock(filePath: string): Promise<boolean> {
  * @throws If the file can not be accessed or created
  */
 export async function unlock(filePath: string): Promise<boolean> {
-  const lockFile = filePath + ".lock";
+  const lockFile = filePath + "-lock";
 
   try {
     await unlink(lockFile);

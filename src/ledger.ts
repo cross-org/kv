@@ -59,11 +59,11 @@ export class KVLedger {
   };
 
   constructor(filePath: string) {
-    this.dataPath = toAbsolutePath(filePath + ".data");
+    this.dataPath = toAbsolutePath(filePath);
   }
 
   /**
-   * Opens the Ledger based on a provided file path.
+   * Opens the Ledger based on a provided filename or full path.
    *
    * @param filePath - Path to the base file for the KV store.
    */
@@ -256,7 +256,7 @@ export class KVLedger {
   }
 
   public async rawGetTransaction(
-    offset: number,
+    baseOffset: number,
     readData: boolean = true,
     externalFd?: Deno.FsFile | FileHandle,
   ): Promise<KVLedgerResult> {
@@ -265,29 +265,40 @@ export class KVLedger {
     try {
       if (!externalFd) fd = await rawOpen(this.dataPath, false);
 
-      // Fetch 3 + 4 + 4 bytes (signature, header length, data length) + prefetch
+      // Fetch 2 + 4 + 4 bytes (signature, header length, data length) + prefetch
       const transactionLengthData = await readAtPosition(
         fd!,
-        3 + 8 + LEDGER_PREFETCH_BYTES, // Updated to include 3 bytes for signature
-        offset,
+        TRANSACTION_SIGNATURE.length + 4 + 4 + LEDGER_PREFETCH_BYTES, // Updated to include 3 bytes for signature
+        baseOffset,
       );
       const transactionLengthDataView = new DataView(
         transactionLengthData.buffer,
       );
 
+      let headerOffset = 0;
+
       // Read and validate the CKT signature
       const signature = new TextDecoder().decode(
-        transactionLengthData.slice(0, 3),
+        transactionLengthData.slice(headerOffset, TRANSACTION_SIGNATURE.length),
       );
       if (signature !== TRANSACTION_SIGNATURE) {
         throw new Error("Invalid transaction signature");
       }
+      headerOffset += TRANSACTION_SIGNATURE.length;
 
-      // Read header length (offset by 3 bytes for signature)
-      const headerLength = transactionLengthDataView.getUint32(3, false);
+      // Read header length (offset by 4 bytes for header length uint32)
+      const headerLength = transactionLengthDataView.getUint32(
+        headerOffset,
+        false,
+      );
+      headerOffset += 4;
 
-      // Read data length (offset by 3 bytes for signature)
-      const dataLength = transactionLengthDataView.getUint32(7, false);
+      // Read data length (offset by 4 bytes for header length uint32)
+      const dataLength = transactionLengthDataView.getUint32(
+        headerOffset,
+        false,
+      );
+      headerOffset += 4;
 
       const transaction = new KVTransaction();
 
@@ -295,43 +306,46 @@ export class KVLedger {
       let transactionHeaderData;
 
       // - directly from file
-      if (headerLength + 3 + 8 > LEDGER_PREFETCH_BYTES) {
+      if (headerLength + headerOffset > LEDGER_PREFETCH_BYTES) {
         transactionHeaderData = await readAtPosition(
           fd!,
           headerLength,
-          offset + 3 + 8,
+          baseOffset + headerOffset,
         );
         transaction.headerFromUint8Array(transactionHeaderData);
         // - from pre-fetched data
       } else {
         transaction.headerFromUint8Array(
-          transactionLengthData.subarray(3 + 8, headerLength + 3 + 8),
+          transactionLengthData.subarray(
+            headerOffset,
+            headerLength + headerOffset,
+          ),
         );
       }
 
       // Read transaction data (optional)
       if (readData) {
         // Directly from file
-        if (headerLength + 3 + 8 + dataLength > LEDGER_PREFETCH_BYTES) {
+        if (headerLength + headerOffset + dataLength > LEDGER_PREFETCH_BYTES) {
           const transactionData = await readAtPosition(
             fd!,
             dataLength,
-            offset + 3 + 8 + headerLength,
+            baseOffset + headerOffset + headerLength,
           );
           await transaction.dataFromUint8Array(transactionData);
           // From pre-fetched data
         } else {
           await transaction.dataFromUint8Array(
             transactionLengthData.slice(
-              headerLength + 3 + 8,
-              headerLength + 3 + 8 + dataLength,
+              headerLength + headerOffset,
+              headerLength + headerOffset + dataLength,
             ),
           );
         }
       }
       return {
-        offset: offset,
-        length: 3 + 4 + 4 + dataLength + headerLength, // Include 3 bytes for signature
+        offset: baseOffset,
+        length: headerOffset + headerLength + dataLength,
         transaction,
       };
     } finally {
@@ -378,7 +392,7 @@ export class KVLedger {
       }
 
       // 4. Compact the Data File
-      const tempFilePath = this.dataPath + ".tmp";
+      const tempFilePath = this.dataPath + "-tmp";
       const tempLedger = new KVLedger(tempFilePath);
       await tempLedger.open(true);
 
@@ -395,7 +409,7 @@ export class KVLedger {
 
       // 5. Replace Original File
       await unlink(this.dataPath);
-      await rename(tempFilePath + ".data", this.dataPath);
+      await rename(tempFilePath, this.dataPath);
 
       // 6. Update the Cached Header
       await this.readHeader();

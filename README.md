@@ -1,5 +1,8 @@
 # cross/kv: A Fast Key/Value Database for Node, Deno and Bun.
 
+[![JSR](https://jsr.io/badges/@cross/kv)](https://jsr.io/@cross/kv)
+[![JSR Score](https://jsr.io/badges/@<scope>/@cross/kv)](https://jsr.io/@cross/kv)
+
 A cross-platform, in-memory indexed and file based Key/Value database for
 JavaScript and TypeScript, designed for seamless multi-process access and
 compatibility across Node.js, Deno, and Bun.
@@ -46,7 +49,8 @@ import { KV } from "@cross/kv";
 
 const kvStore = new KV();
 
-await kvStore.open("./mydatabase/"); // Path where data files will be stored
+// Open the database, path and database is created if it does not exist
+await kvStore.open("data/mydatabase.db");
 
 // Set a value
 await kvStore.set(["data", "username"], "Alice");
@@ -71,7 +75,7 @@ import { KV } from "@cross/kv";
 const kvStore = new KV();
 
 // Open the database
-await kvStore.open("./mydatabase/");
+await kvStore.open("data/mydatabase.db");
 
 // Store some values/documents indexed by users.by_id.<id>
 await kvStore.set(["users", "by_id", 1], {
@@ -125,7 +129,8 @@ await kvStore.close();
 
 - `KV(options)` - Main class. Options such as `autoSync` and `syncIntervalMs`
   are optional.
-  - `async open(filepath)` - Opens the KV store.
+  - `async open(filepath, createIfMissing)` - Opens the KV store.
+    `createIfMissing` defaults to true.
   - `async set(key, value)` - Stores a value.
   - `async get(key)` - Retrieves a value.
   - `async *iterate(query)` - Iterates over entries for a key.
@@ -133,6 +138,11 @@ await kvStore.close();
   - `async listAll(query)` - Gets all entries for a key as an array.
   - `async delete(key)` - Deletes a key-value pair.
   - `async sync()` - Synchronizez the ledger with disk.
+  - `watch(query, callback, recursive): void` - Registers a callback to be
+    called whenever a new transaction matching the given query is added to the
+    database.
+  - `unwatch(query, callback): void` - Unregisters a previously registered watch
+    handler.
   - `beginTransaction()` - Starts a transaction.
   - `async endTransaction()` - Ends a transaction, returns a list of `Errors` if
     any occurred.
@@ -244,7 +254,7 @@ synchronization results and potential errors:
 
 ```typescript
 const kvStore = new KV();
-await kvStore.open("./mydatabase/");
+await kvStore.open("db/mydatabase.db");
 
 kvStore.on("sync", (eventData) => {
   switch (eventData.result) {
@@ -253,9 +263,10 @@ kvStore.on("sync", (eventData) => {
     case "success": // Synchronization successful, new transactions added
     case "ledgerInvalidated": // Ledger recreated, database reopened and index resynchronized
     case "error": // An error occurred during synchronization
+    default:
+      // Handle unexpected eventData.result values if needed
   }
 });
-```
 
 ## Contributing
 
@@ -268,3 +279,4 @@ package in most distributions.
 ## **License**
 
 MIT License
+```

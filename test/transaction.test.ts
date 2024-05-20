@@ -2,6 +2,7 @@ import { assertEquals, assertThrows } from "@std/assert";
 import { test } from "@cross/test";
 import { KVKeyInstance } from "../src/key.ts";
 import { KVOperation, KVTransaction } from "../src/transaction.ts";
+import { TRANSACTION_SIGNATURE } from "../src/constants.ts";
 
 test("KVTransaction: create and toUint8Array", async () => {
   const key = new KVKeyInstance(["testKey"]);
@@ -13,9 +14,15 @@ test("KVTransaction: create and toUint8Array", async () => {
 
   const uint8Array = transaction.toUint8Array();
   const decodedTransaction = new KVTransaction();
-  const headerLength = new DataView(uint8Array.buffer).getUint32(3);
+
+  const headerOffset = TRANSACTION_SIGNATURE.length + 4 + 4; // <2 bytes "T;"><uint32 header length><unit32 data length>
+
+  const headerLength = new DataView(uint8Array.buffer).getUint32(
+    TRANSACTION_SIGNATURE.length,
+  );
+
   decodedTransaction.headerFromUint8Array(
-    uint8Array.slice(8 + 3, 8 + 3 + headerLength),
+    uint8Array.slice(headerOffset, headerOffset + headerLength),
   ); // Skip the initial 11 bytes (signature, header and data lengths)
   await decodedTransaction.dataFromUint8Array(transaction.data!);
   assertEquals(

@@ -6,9 +6,9 @@ import { TRANSACTION_SIGNATURE } from "./constants.ts";
 /**
  * Data structure of a Cross/kv transaction:
  *
- * Header signature (3 bytes) | Header Length (uint32) | Data Length (uint32) | Header Bytes... | Data Bytes... |
+ * Header signature (2 bytes) | Header Length (uint32) | Data Length (uint32) | Header Bytes... | Data Bytes... |
  *
- * - Header Signature: Three bytes "CKT" designating the start of a Cross KV Transaction, and is primarily used to fast forward past corrupted data.
+ * - Header Signature: Two bytes "T;" designating the start of a Cross KV Transaction, and is primarily used to fast forward past corrupted data.
  * - Header Length: Specifies the length of the transaction header in bytes.
  * - Data Length: Specifies the length of the transaction data in bytes.
  * - Header Bytes: Contains metadata about the transaction (detailed below).
@@ -155,23 +155,14 @@ export class KVTransaction {
     offset += 1;
 
     // Decode timestamp
-    if (offset + 8 > dataView.byteLength) {
-      throw new Error("Invalid data: Not enough bytes to decode timestamp");
-    }
     this.timestamp = dataView.getFloat64(offset, false);
     offset += 8;
 
     // Decode hash length (assuming it's encoded as uint32)
-    if (offset + 4 > dataView.byteLength) {
-      throw new Error("Invalid data: Not enough bytes to decode hash length");
-    }
     const hashLength = dataView.getUint32(offset, false);
     offset += 4;
 
     // Decode hash bytes
-    if (offset + hashLength > data.length) {
-      throw new Error("Invalid data: Hash data truncated");
-    }
     this.hash = data.subarray(offset, offset + hashLength);
     offset += hashLength;
 
@@ -201,21 +192,27 @@ export class KVTransaction {
     const dataLength = pendingTransactionData
       ? pendingTransactionData.length
       : 0;
-    const fullDataSize = 3 + 4 + 4 + headerSize + dataLength;
+    const fullDataSize = TRANSACTION_SIGNATURE.length + 4 + 4 + headerSize +
+      dataLength;
 
     const fullData = new Uint8Array(fullDataSize);
     const fullDataView = new DataView(fullData.buffer);
 
+    let offset = 0;
+
     // Encode transaction signature
     const signature = new TextEncoder().encode(TRANSACTION_SIGNATURE);
     fullData.set(signature, 0);
+    offset += TRANSACTION_SIGNATURE.length;
 
     // Encode header and data lengths
-    fullDataView.setUint32(3, headerSize, false);
-    fullDataView.setUint32(7, dataLength, false);
+    fullDataView.setUint32(offset, headerSize, false);
+    offset += 4;
+
+    fullDataView.setUint32(offset, dataLength, false);
+    offset += 4;
 
     // Encode key bytes
-    let offset = 3 + 4 + 4; // Start after length fields
     fullData.set(keyBytes, offset);
     offset += keyBytes.length;
 

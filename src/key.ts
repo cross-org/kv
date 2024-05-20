@@ -211,7 +211,7 @@ export class KVKeyInstance {
 
       if (typeof element === "string" && !KV_KEY_ALLOWED_CHARS.test(element)) {
         throw new TypeError(
-          "String elements in the key can only contain a-zA-Z, 0-9, '-', and '_'",
+          "String elements in the key can only contain unicode letters, numbers, '@',  '-', and '_'",
         );
       }
     }
@@ -228,5 +228,75 @@ export class KVKeyInstance {
     }
 
     return this.key.join(".");
+  }
+
+  /**
+   * Checks if this key instance matches a given query, optionally including descendants.
+   *
+   * This implementation performs strict type matching, ensuring that number elements in the query only match number elements in the key, and likewise for strings.
+   *
+   * @param query The query to match against.
+   * @param recursive If true, the match includes descendant keys; if false, only the exact key matches.
+   * @returns `true` if the key matches the query (and optionally its descendants), `false` otherwise.
+   */
+  public matchesQuery(query: KVQuery, recursive: boolean = false): boolean {
+    const thisKey = this.get() as KVKey;
+
+    if (!recursive && thisKey.length < query.length) {
+      return false;
+    }
+
+    if (thisKey.length > query.length && !recursive) {
+      return false;
+    }
+
+    for (let i = 0; i < query.length; i++) {
+      const queryElement = query[i];
+      const keyElement = thisKey[i];
+      if (typeof queryElement === "string") {
+        if (typeof keyElement !== "string" || queryElement !== keyElement) {
+          return false;
+        }
+      } else if (typeof queryElement === "number") {
+        if (typeof keyElement !== "number" || queryElement !== keyElement) {
+          return false;
+        }
+      } else if (typeof queryElement === "object") {
+        if (
+          // String comparison
+          (typeof keyElement === "string" &&
+            (queryElement.from === undefined ||
+              keyElement >= (queryElement.from as string)) &&
+            (queryElement.to === undefined ||
+              keyElement <= (queryElement.to as string))) ||
+          // Number comparison
+          (typeof keyElement === "number" &&
+            (queryElement.from === undefined ||
+              keyElement >= (queryElement.from as number)) &&
+            (queryElement.to === undefined ||
+              keyElement <= (queryElement.to as number)))
+        ) {
+          /* Ok */
+        } else {
+          return false;
+        }
+      } else {
+        throw new Error(`Invalid query element type at index ${i}`);
+      }
+
+      // Recursively check descendants if needed
+      if (recursive && thisKey.length > i + 1) {
+        const subquery = query.slice(i + 1);
+        const subkey = thisKey.slice(i + 1);
+
+        if (
+          !new KVKeyInstance(subkey, true).matchesQuery(subquery, recursive)
+        ) {
+          return false;
+        }
+      }
+    }
+
+    return true; // All elements match
   }
 }
