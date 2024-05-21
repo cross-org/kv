@@ -1,3 +1,7 @@
+## 0.12.1
+
+- Add method `.isOpen()`
+
 ## 0.12.0
 
 - Use a header flag instead of separate file to lock/unlock database

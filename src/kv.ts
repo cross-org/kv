@@ -379,8 +379,21 @@ export class KV extends EventEmitter {
    * @throws {Error} If the database is not open.
    */
   private ensureOpen(): void {
-    if (!this.ledger || this.ledger.isClosing()) {
+    if (!this.isOpen()) {
       throw new Error("Database not open");
+    }
+  }
+
+  /**
+   * Checks if the database is open and ready for interaction
+   *
+   * @returns True if open, false if closed.
+   */
+  public isOpen(): boolean {
+    if (!this.ledger || this.ledger.isClosing() || this.aborted) {
+      return false;
+    } else {
+      return true;
     }
   }
 

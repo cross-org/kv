@@ -90,6 +90,8 @@ bunx jsr add @cross/kv
   - `async vacuum()` - Reclaims storage space.
   - `on(eventName, eventData)` - Listen for events such as `sync`,
     `watchdogError` or `closing`.
+  - `isOpen()` - Returns true if the database is open and ready for
+    transactions.
   - `async close()` - Closes the KV store.
 
 ### Keys
