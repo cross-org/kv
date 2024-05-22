@@ -42,7 +42,7 @@ export interface KVSyncResult {
 /**
  * A function that is called when a watched transaction occurs.
  */
-export interface WatchHandler {
+export interface WatchHandler<T> {
   /**
    * The query used to filter the transactions.
    */
@@ -50,7 +50,7 @@ export interface WatchHandler {
   /**
    * The callback function that will be called when a transaction matches the query.
    */
-  callback: (transaction: KVTransactionResult) => void;
+  callback: (transaction: KVTransactionResult<T>) => void;
   /**
    * Whether to include child keys
    */
@@ -95,7 +95,7 @@ export class KV extends EventEmitter {
   private index: KVIndex = new KVIndex();
   private ledger?: KVLedger;
   private pendingTransactions: KVTransaction[] = [];
-  private watchHandlers: WatchHandler[] = [];
+  private watchHandlers: WatchHandler<any>[] = [];
 
   // Configuration
   private ledgerPath?: string;
@@ -244,7 +244,7 @@ export class KV extends EventEmitter {
    */
   public async sync(force = false, doLock = true): Promise<KVSyncResult> {
     // Throw if database isn't open
-    this.ensureOpen();
+    if (force) this.ensureOpen();
 
     // Ensure ledger is open and instance is not closed
     if (this.ledger?.isClosing() || this.aborted) {
@@ -403,11 +403,13 @@ export class KV extends EventEmitter {
    * @param key - Representation of the key.
    * @returns A promise that resolves to the retrieved value, or null if not found.
    */
-  public async get(key: KVKey): Promise<KVTransactionResult | null> {
+  public async get<T = unknown>(
+    key: KVKey,
+  ): Promise<KVTransactionResult<T> | null> {
     // Throw if database isn't open
     this.ensureOpen();
 
-    for await (const entry of this.iterate(key, 1)) {
+    for await (const entry of this.iterate<T>(key, 1)) {
       return entry;
     }
     return null;
@@ -435,10 +437,10 @@ export class KV extends EventEmitter {
    * const allEntries = await kvStore.list(["users"]);
    * console.log(allEntries);
    */
-  public async *iterate(
+  public async *iterate<T = unknown>(
     key: KVQuery,
     limit?: number,
-  ): AsyncGenerator<KVTransactionResult> {
+  ): AsyncGenerator<KVTransactionResult<T>> {
     // Throw if database isn't open
     this.ensureOpen();
 
@@ -469,12 +471,14 @@ export class KV extends EventEmitter {
    * @param key - Representation of the key to query.
    * @returns A Promise that resolves to an array of all matching data entries.
    */
-  public async listAll(key: KVQuery): Promise<KVTransactionResult[]> {
+  public async listAll<T = unknown>(
+    key: KVQuery,
+  ): Promise<KVTransactionResult<T>[]> {
     // Throw if database isn't open
     this.ensureOpen();
 
-    const entries: KVTransactionResult[] = [];
-    for await (const entry of this.iterate(key)) {
+    const entries: KVTransactionResult<T>[] = [];
+    for await (const entry of this.iterate<T>(key)) {
       entries.push(entry);
     }
     return entries;
@@ -507,10 +511,7 @@ export class KV extends EventEmitter {
    * @param key - Representation of the key.
    * @param value - The value to store.
    */
-  public async set(
-    key: KVKey,
-    value: any,
-  ): Promise<void> {
+  public async set<T = unknown>(key: KVKey, value: T): Promise<void> {
     // Throw if database isn't open
     this.ensureOpen();
 
@@ -669,9 +670,9 @@ export class KV extends EventEmitter {
    * @param query - The query to match against new transactions.
    * @param callback - The callback function to be called when a match is found. The callback will receive the matching transaction as its argument.
    */
-  public watch(
+  public watch<T = unknown>(
     query: KVQuery,
-    callback: (transaction: KVTransactionResult) => void,
+    callback: (transaction: KVTransactionResult<T>) => void,
     recursive: boolean = false,
   ) {
     this.watchHandlers.push({ query, callback, recursive });
@@ -687,9 +688,9 @@ export class KV extends EventEmitter {
    *
    * @returns True on success
    */
-  public unwatch(
+  public unwatch<T = unknown>(
     query: KVQuery,
-    callback: (transaction: KVTransactionResult) => void,
+    callback: (transaction: KVTransactionResult<T>) => void,
   ): boolean {
     const newWatchHandlers = this.watchHandlers.filter(
       (handler) => handler.query !== query || handler.callback !== callback,

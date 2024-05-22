@@ -77,7 +77,7 @@ export type KVTransactionData = Uint8Array;
 /**
  * Represents a single transaction result from the Key-Value store.
  */
-export interface KVTransactionResult {
+export interface KVTransactionResult<T> {
   /**
    * The key associated with the transaction.
    */
@@ -98,7 +98,7 @@ export interface KVTransactionResult {
    * For SET operations, this will be the value that was set.
    * For DELETE operations, this will typically be null or undefined.
    */
-  data: unknown;
+  data: T;
 
   /**
    * The hash of the raw transaction data. This can be used for
@@ -242,7 +242,7 @@ export class KVTransaction {
     return fullData;
   }
 
-  private getData(): unknown | null {
+  private getData<T>(): T | null {
     // Return data, should be validated through create or fromUint8Array
     if (this.data) {
       return decode(this.data);
@@ -255,7 +255,7 @@ export class KVTransaction {
    * Converts the transaction to a KVTransactionResult object.
    * This assumes that the transaction's data is already validated or created correctly.
    */
-  public asResult(): KVTransactionResult {
+  public asResult<T>(): KVTransactionResult<T> {
     if (
       this.operation === undefined || this.timestamp === undefined ||
       this.hash === undefined
@@ -268,7 +268,7 @@ export class KVTransaction {
       key: this.key!.get() as KVKey,
       operation: this.operation,
       timestamp: this.timestamp,
-      data: this.getData(),
+      data: this.getData() as T,
       hash: this.hash,
     };
   }

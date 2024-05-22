@@ -270,7 +270,7 @@ test("KV: iteration with limit", async () => {
 
   // Iterate with a limit of 3
   const limit = 3;
-  const results: KVTransactionResult[] = [];
+  const results: KVTransactionResult<unknown>[] = [];
   for await (const entry of kvStore.iterate(["data"], limit)) {
     results.push(entry);
   }
@@ -383,7 +383,7 @@ test("KV: sync event triggers and reflects data changes", async () => {
   await kvStore1.open(tempFilePrefix);
   await kvStore2.open(tempFilePrefix);
 
-  let syncedData: KVTransactionResult[] = [];
+  let syncedData: KVTransactionResult<unknown>[] = [];
 
   // Listen for the "sync" event on the second instance
   // @ts-ignore ksStore2 is an EventEmitter
@@ -415,7 +415,7 @@ test("KV: watch functionality - basic matching", async () => {
   await kvStore.open(tempFilePrefix);
 
   const watchedKey = ["user", "profile"];
-  let receivedTransaction: KVTransactionResult | null = null;
+  let receivedTransaction: KVTransactionResult<unknown> | null = null;
 
   // Watch for a specific key
   kvStore.watch(watchedKey, (transaction) => {
@@ -436,7 +436,7 @@ test("KV: watch functionality - recursive matching", async () => {
   const kvStore = new KV({ autoSync: false });
   await kvStore.open(tempFilePrefix);
 
-  const receivedTransactions: KVTransactionResult[] = [];
+  const receivedTransactions: KVTransactionResult<unknown>[] = [];
 
   const query: KVQuery = ["users"];
 
@@ -461,7 +461,7 @@ test("KV: watch functionality - range matching", async () => {
   const kvStore = new KV({ autoSync: false });
   await kvStore.open(tempFilePrefix);
 
-  const receivedTransactions: KVTransactionResult[] = [];
+  const receivedTransactions: KVTransactionResult<unknown>[] = [];
 
   kvStore.watch(["scores", { from: 10, to: 20 }], (transaction) => {
     receivedTransactions.push(transaction);

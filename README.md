@@ -1,11 +1,10 @@
-# cross/kv: A Fast Key/Value Database for Node, Deno and Bun.
+# cross/kv: Fast Key/Value Database for Node, Deno and Bun.
 
 [![JSR](https://jsr.io/badges/@cross/kv)](https://jsr.io/@cross/kv)
-[![JSR Score](https://jsr.io/badges/@<scope>/@cross/kv)](https://jsr.io/@cross/kv)
+[![JSR Score](https://jsr.io/badges/@cross/kv)](https://jsr.io/@cross/kv)
 
-An in-memory indexed and file based Key/Value database for JavaScript and
-TypeScript, designed for seamless multi-process access and compatibility across
-Node.js, Deno, and Bun.
+A lightweight, fast, powerful and cross-platform key-value database for Node.js,
+Deno, and Bun.
 
 ```typescript
 import { KV } from "@cross/kv";
@@ -35,23 +34,26 @@ db.close();
 
 ## Features
 
-- **Efficient Key-Value Storage:** Rapid storage and retrieval using
-  hierarchical keys and a high-performance in-memory index.
-- **Durable Transactions:** Ensure data integrity and recoverability through an
-  append-only transaction ledger.
-- **Atomic Transactions:** Guarantee data consistency by grouping multiple
-  operations into a single, indivisible unit.
-- **Optimized Storage:** Reclaim disk space and maintain performance through
-  vacuuming operations.
-- **Cross-Platform & Multi-Process:** Built in pure TypeScript, working
-  seamlessly across Node.js, Deno, and Bun, supporting concurrent access by
-  multiple processes.
-- **Flexible & Customizable:** Store any JavaScript object, subscribe to data
-  changes, and fine-tune synchronization behavior.
+## Features
+
+- **Cross-Platform & Multi-Process:** Built with pure TypeScript for seamless
+  compatibility across Node.js, Deno, and Bun, with built-in support for
+  concurrent access by multiple processes.
+- **Powerful:** Supports hierarchical keys, flexible mid-key range queries, and
+  real-time data change notifications through `.watch()`.
+- **Simple and Fast:** Lightweight and performant storage with an in-memory
+  index for efficient data retrieval.
+- **Durable:** Ensures data integrity and reliability by storing each database
+  as a single, append-only transaction ledger.
+- **Type-Safe:** Leverages TypeScript generics for enhanced type safety when
+  setting and retrieving values.
+- **Atomic Transactions:** Guarantees data consistency by grouping multiple
+  operations into indivisible units, which also improves performance.
+- **Flexible:** Store any serializable JavaScript object (except functions and
+  WeakMaps), and customize synchronization behavior to optimize for your
+  specific use case.
 
 ## Installation
-
-Full installation instructions available at <https://jsr.io/@cross/kv>
 
 ```bash
 # Using npm
@@ -72,18 +74,18 @@ bunx jsr add @cross/kv
   are optional.
   - `async open(filepath, createIfMissing)` - Opens the KV store.
     `createIfMissing` defaults to true.
-  - `async set(key, value)` - Stores a value.
-  - `async get(key)` - Retrieves a value.
-  - `async *iterate(query)` - Iterates over entries for a key.
+  - `async set<T>(key, value)` - Stores a value.
+  - `async get<T>(key)` - Retrieves a value.
+  - `async *iterate<T>(query)` - Iterates over entries for a key.
   - `listKeys(query)` - List all keys under <query>.
-  - `async listAll(query)` - Gets all entries for a key as an array.
+  - `async listAll<T>(query)` - Gets all entries for a key as an array.
   - `async delete(key)` - Deletes a key-value pair.
   - `async sync()` - Synchronizez the ledger with disk.
-  - `watch(query, callback, recursive): void` - Registers a callback to be
+  - `watch<T>(query, callback, recursive): void` - Registers a callback to be
     called whenever a new transaction matching the given query is added to the
     database.
-  - `unwatch(query, callback): void` - Unregisters a previously registered watch
-    handler.
+  - `unwatch<T>(query, callback): void` - Unregisters a previously registered
+    watch handler.
   - `beginTransaction()` - Starts an atomic transaction.
   - `async endTransaction()` - Ends an atomic transaction, returns a list of
     `Errors` if any occurred.
@@ -126,9 +128,9 @@ including:
 
 ### Queries
 
-Queries are basically keys, but with additional support for ranges, which are
+Queries are similar to keys but with additional support for ranges, specified as
 objects like `{ from: 5, to: 20 }` or `{ from: "a", to: "l" }`. An empty range
-(`{}`) means any document.
+(`{}`) matches any document.
 
 **Example queries**
 
@@ -159,36 +161,24 @@ transaction.
 
 ### Single-Process Synchronization
 
-In single-process scenarios, explicit synchronization is unnecessary. You can
-disable automatic synchronization by setting the `autoSync` option to false, and
-do not have to care about running `.sync()`. This can improve performance when
-only one process is accessing the database.
+In single-process scenarios, explicit synchronization is often unnecessary. You
+can disable automatic synchronization by setting the `autoSync` option to
+`false`, eliminating automated `.sync()` calls. This can potentially improve
+performance when only one process accesses the database.
 
 ### Multi-Process Synchronisation
 
-In multi-process scenarios, synchronization is crucial to ensure data
-consistency across different processes. `cross/kv` manages synchronization in
-the following ways:
+In multi-process scenarios, synchronization is essential for maintaining data
+consistency. `cross/kv` offers automatic index synchronization upon each data
+insertion and at a configurable interval (default: 1000ms). Customizing this
+interval providing fine-grained control over the trade-off between consistency
+and performance. For strict consistency guarantees, you can manually call
+`.sync()` before reading data.
 
-- **Automatic Index Synchronization:** The index is automatically synchronized
-  at a set interval (default: 1000ms), ensuring that changes made by other
-  processes are reflected in all instances within a maximum of `syncIntervalMs`
-  milliseconds. You can adjust this interval using the `syncIntervalMs` option.
-
-- **Manual Synchronization for Reads:** When reading data, you have two options:
-
-  - **Accept Potential Inconsistency:** By default, reads do not trigger an
-    immediate synchronization, which can lead to a small window of inconsistency
-    if another process has recently written to the database. This is generally
-    acceptable for most use cases.
-
-  - **Force Synchronization:** For strict consistency, you can manually trigger
-    synchronization before reading using the `.sync()` method:
-
-  ```ts
-  await kv.sync(); // Ensure the most up-to-date data
-  const result = await kv.get(["my", "key"]); // Now read with confidence
-  ```
+```ts
+await kv.sync(); // Ensure the most up-to-date data
+const result = await kv.get(["my", "key"]); // Now read with confidence
+```
 
 ### Monitoring Synchronization Events
 

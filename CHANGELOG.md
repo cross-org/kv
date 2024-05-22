@@ -1,3 +1,10 @@
+## 0.12.2
+
+- Only throw in `.sync()` on closed database if the force parameter is true.
+- Make all relevant methods (`.get()`, `.set()`, `.iterate()`, `.listAll()` ...)
+  type safe using generics
+- Update docs
+
 ## 0.12.1
 
 - Add method `.isOpen()`
