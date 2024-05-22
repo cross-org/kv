@@ -25,8 +25,6 @@ test("KVLedger: readHeader - valid header", async () => {
     "Created timestamp should be valid",
   );
   assertEquals(ledger.header.currentOffset, LEDGER_BASE_OFFSET);
-
-  ledger.close();
 });
 
 test("KVLedger: readHeader - invalid file ID", async () => {
@@ -43,8 +41,6 @@ test("KVLedger: readHeader - invalid file ID", async () => {
     () => ledger.readHeader(),
     "Invalid database file format",
   );
-
-  ledger.close();
 });
 
 test("KVLedger: readHeader - invalid version", async () => {
@@ -58,8 +54,6 @@ test("KVLedger: readHeader - invalid version", async () => {
 
   // Act & Assert: Expect an InvalidLedgerError
   await assertRejects(() => ledger.readHeader(), "Invalid version");
-
-  ledger.close();
 });
 
 test("KVLedger: writeHeader", async () => {
@@ -77,6 +71,4 @@ test("KVLedger: writeHeader", async () => {
   await ledger.readHeader(); // Re-read from disk
   assertEquals(ledger.header.created, 1234567890);
   assertEquals(ledger.header.currentOffset, 2048);
-
-  ledger.close();
 });

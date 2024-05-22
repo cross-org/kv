@@ -54,7 +54,7 @@ interface KVLedgerResult {
 }
 
 export class KVLedger {
-  private aborted: boolean = false;
+  private opened: boolean = false;
   private dataPath: string;
   public header: KVLedgerHeader = {
     fileId: LEDGER_FILE_ID,
@@ -85,10 +85,8 @@ export class KVLedger {
     } else {
       throw new Error("Database not found.");
     }
-  }
 
-  close() {
-    this.aborted = true;
+    this.opened = true;
   }
 
   /**
@@ -400,7 +398,6 @@ export class KVLedger {
         await tempLedger.add([transaction.transaction.toUint8Array()]);
       }
       this.header.currentOffset = tempLedger.header.currentOffset;
-      tempLedger.close();
 
       // 5. Replace Original File
       await unlink(this.dataPath);
@@ -414,12 +411,8 @@ export class KVLedger {
     }
   }
 
-  public isClosing() {
-    return this.aborted;
-  }
-
   private ensureOpen(): void {
-    if (this.aborted) throw new Error("Ledger is closed.");
+    if (!this.open) throw new Error("Ledger is not opened yet.");
   }
 
   public async lock(): Promise<void> {
@@ -486,5 +479,9 @@ export class KVLedger {
     } finally {
       if (fd) fd.close();
     }
+  }
+
+  public isOpen(): boolean {
+    return this.opened;
   }
 }

@@ -162,7 +162,6 @@ export class KV extends EventEmitter {
 
     // If there is an existing ledger, close it and clear the index
     if (this.ledger) {
-      this.ledger?.close();
       this.index.clear();
     }
 
@@ -245,14 +244,6 @@ export class KV extends EventEmitter {
   public async sync(force = false, doLock = true): Promise<KVSyncResult> {
     // Throw if database isn't open
     if (force) this.ensureOpen();
-
-    // Ensure ledger is open and instance is not closed
-    if (this.ledger?.isClosing() || this.aborted) {
-      const error = new Error(
-        this.aborted ? "Store is closed" : "Ledger is not open",
-      );
-      return { result: "noop", error }; // Emit noop since no sync was performed
-    }
 
     if (this.blockSync && !force) {
       const error = new Error("Store synchronization is blocked");
@@ -390,11 +381,7 @@ export class KV extends EventEmitter {
    * @returns True if open, false if closed.
    */
   public isOpen(): boolean {
-    if (!this.ledger || this.ledger.isClosing() || this.aborted) {
-      return false;
-    } else {
-      return true;
-    }
+    return !!this.ledger && this.ledger.isOpen();
   }
 
   /**
@@ -708,13 +695,16 @@ export class KV extends EventEmitter {
    * 3. Closes the associated ledger.
    */
   public async close() {
-    this.aborted = true;
-    await this.watchdogPromise;
-    clearTimeout(this.watchdogTimer!);
-
     // @ts-ignore emit exists
     this.emit("closing");
 
-    this.ledger?.close();
+    // Used to stop any pending watchdog runs
+    this.aborted = true;
+
+    // Await running watchdog
+    await this.watchdogPromise;
+
+    // Abort any watchdog timer
+    clearTimeout(this.watchdogTimer!);
   }
 }

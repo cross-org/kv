@@ -1,3 +1,7 @@
+## 0.13.2
+
+- Be more graceful when closing
+
 ## 0.13.1
 
 - Allow unlocking the database while closing it.

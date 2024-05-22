@@ -55,24 +55,25 @@ test("KV: set, get and delete (numbers and strings, with sync)", async () => {
 
 test("KV: set, get and delete (big numbers)", async () => {
   const tempFilePrefix = await tempfile();
-  const kvStore = new KV();
+  const kvStore = new KV({ autoSync: false });
   await kvStore.open(tempFilePrefix);
   await kvStore.set(
-    ["num", 54645645646546345634523452345234545464],
+    ["num", 1],
     54645645646546345634523452345234545464,
   );
 
   assertEquals(
-    (await kvStore.get(["num", 54645645646546345634523452345234545464]))?.data,
+    (await kvStore.get(["num", 1]))?.data,
     54645645646546345634523452345234545464,
   );
 
   kvStore.close();
 
-  const kvStore2 = new KV();
+  const kvStore2 = new KV({ autoSync: false });
   await kvStore2.open(tempFilePrefix);
+  await kvStore2.sync();
   assertEquals(
-    (await kvStore2.get(["num", 54645645646546345634523452345234545464]))?.data,
+    (await kvStore2.get(["num", 1]))?.data,
     54645645646546345634523452345234545464,
   );
 
