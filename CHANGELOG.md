@@ -1,3 +1,7 @@
+## 0.13.1
+
+- Allow unlocking the database while closing it.
+
 ## 0.13.0
 
 - Only throw in `.sync()` on closed database if the force parameter is true.

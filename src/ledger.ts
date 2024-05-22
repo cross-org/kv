@@ -477,7 +477,6 @@ export class KVLedger {
   }
 
   public async unlock(): Promise<void> {
-    await this.ensureOpen();
     let fd;
     try {
       fd = await rawOpen(this.dataPath, true);
