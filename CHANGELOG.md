@@ -1,4 +1,4 @@
-## 0.12.2
+## 0.13.0
 
 - Only throw in `.sync()` on closed database if the force parameter is true.
 - Make all relevant methods (`.get()`, `.set()`, `.iterate()`, `.listAll()` ...)

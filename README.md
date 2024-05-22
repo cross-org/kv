@@ -13,7 +13,7 @@ import { KV } from "@cross/kv";
 const db = new KV();
 await db.open("data/mydatabase.db");
 
-// Listen for new interests
+// Listen for new interests of any user
 db.watch(["users", {}, "interests"], (data) => {
   console.log(data);
 });
@@ -26,13 +26,11 @@ await db.set(["users", 1, "interests"], {
   description: "Fishing",
 });
 
-// Display all contact information connected to users with id < 10
+// Display all contact information connected to users with id <= 10
 console.log(await db.listAll(["users", { to: 10 }, "contact"]));
 
 db.close();
 ```
-
-## Features
 
 ## Features
 
