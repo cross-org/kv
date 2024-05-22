@@ -1,10 +1,10 @@
-# cross/kv: Fast Key/Value Database for Node, Deno and Bun.
-
-[![JSR](https://jsr.io/badges/@cross/kv)](https://jsr.io/@cross/kv)
-[![JSR Score](https://jsr.io/badges/@cross/kv)](https://jsr.io/@cross/kv)
+# @cross/kv
 
 A lightweight, fast, powerful and cross-platform key-value database for Node.js,
 Deno, and Bun.
+
+[![JSR](https://jsr.io/badges/@cross/kv)](https://jsr.io/@cross/kv)
+[![JSR Score](https://jsr.io/badges/@cross/kv/score)](https://jsr.io/@cross/kv)
 
 ```typescript
 import { KV } from "@cross/kv";
