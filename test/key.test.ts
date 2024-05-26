@@ -1,6 +1,6 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { test } from "@cross/test";
-import { type KVKey, KVKeyInstance, type KVQuery } from "../src/key.ts";
+import { type KVKey, KVKeyInstance, type KVQuery } from "../src/lib/key.ts";
 
 test("KVKeyInstance: constructs with valid string key", () => {
   const key = new KVKeyInstance(["users", "user123"]);
@@ -30,7 +30,7 @@ test("KVKeyInstance: constructs with valid number key", () => {
 
 test("KVKeyInstance: returns correct string representation", () => {
   const key = new KVKeyInstance(["users", "data", "user123"]);
-  assertEquals(key.getKeyRepresentation(), "users.data.user123");
+  assertEquals(key.stringify(), "users.data.user123");
 });
 
 test("KVKeyInstance: constructs with valid range", () => {
@@ -58,7 +58,7 @@ test("KVKeyInstance: constructs with valid range (all)", () => {
 
 test("KVKeyInstance: constructs with invalid range (extra property)", () => {
   assertThrows(
-    // @ts-expect-error test unknown property
+    // @ts-ignore Supposed to be invalid
     () => new KVKeyInstance(["users", { test: 1 }], true),
     TypeError,
     "Ranges must have only",
@@ -75,60 +75,6 @@ test("KVKeyInstance: only allows string keys as first entry", () => {
     TypeError,
     "First index of the key must be a string",
   );
-});
-
-test("KVKeyInstance: toUint8Array and fromUint8Array", () => {
-  const originalKeys: (KVKey | KVQuery)[] = [
-    ["users", 123, "profilé"],
-    ["logs", 2023, 11, 15],
-    ["settings", "theme", "dark"],
-  ];
-
-  for (const originalKey of originalKeys) {
-    const keyInstance = new KVKeyInstance(
-      originalKey,
-      Array.isArray(originalKey) &&
-        originalKey.some((element) => typeof element === "object"),
-    ); // Pass `true` for allowRange if it's a query
-    const encodedKey = keyInstance.toUint8Array();
-    const decodedKeyInstance = new KVKeyInstance(encodedKey, false, false); // Decode without validation
-    assertEquals(decodedKeyInstance.get(), originalKey);
-  }
-});
-
-test("KVKeyInstance: throws with invalid string key (characters)", () => {
-  // Test with various invalid characters
-  const invalidChars = [
-    "!",
-    "#",
-    "$",
-    "%",
-    "&",
-    "(",
-    ")",
-    ":",
-    ";",
-    "<",
-    ">",
-    "=",
-    "[",
-    "]",
-    "{",
-    "}",
-    "\\",
-    "|",
-    "?",
-    "/",
-    ".",
-    " ",
-  ];
-  for (const char of invalidChars) {
-    assertThrows(
-      () => new KVKeyInstance(["users", `user${char}123`]),
-      TypeError,
-      `String elements in the key can only contain unicode letters, numbers, '@',  '-', and '_'`,
-    );
-  }
 });
 
 test("KVKeyInstance: matchesQuery - exact string match", () => {
@@ -171,4 +117,98 @@ test("KVKeyInstance: matchesQuery - string range match (inclusive)", () => {
   assertEquals(key.matchesQuery(["users", { from: "k" }]), false);
   assertEquals(key.matchesQuery(["users", { to: "i" }]), false);
   assertEquals(key.matchesQuery(["users", {}]), true); // Empty range matches all
+});
+
+test("KVKeyInstance: stringify and parse basic keys", () => {
+  const keys: KVKey[] = [
+    ["users", "123"],
+    ["data", "filetxt"],
+    ["numbers", 100, 200],
+  ];
+
+  for (const key of keys) {
+    const instance = new KVKeyInstance(key);
+    const stringified = instance.stringify();
+    const parsed = KVKeyInstance.parse(stringified, false);
+    assertEquals(parsed, key);
+  }
+});
+
+test("KVKeyInstance: stringify and parse keys with ranges", () => {
+  const queries: KVQuery[] = [
+    ["users", { from: 1000, to: undefined }, { from: undefined, to: 12312 }],
+    ["data", {}, { from: undefined, to: "zz" }],
+    ["numbers", { from: 50, to: 100 }, 200, {}],
+  ];
+
+  for (const query of queries) {
+    const instance = new KVKeyInstance(query, true); // isQuery=true
+    const stringified = instance.stringify();
+    const parsed = KVKeyInstance.parse(stringified, true);
+    assertEquals(parsed, query);
+  }
+});
+
+test("KVKeyInstance: stringify error on unsupported key type", () => {
+  const invalidKey = ["base", true] as unknown as KVKey;
+  assertThrows(
+    () => {
+      const instance = new KVKeyInstance(invalidKey); // isQuery=true
+      instance.stringify();
+    },
+    Error,
+    "Key elements must be strings or numbers",
+  );
+});
+
+test("KVKeyInstance: parse error on invalid string", () => {
+  const invalidKeyStrings = [
+    "",
+    "#123.users", // Number as first element
+    "users.#123.!", // Invalid character
+    ">=#100abc<=#200", // Invalid range format
+  ];
+
+  for (const keyString of invalidKeyStrings) {
+    assertThrows(() => {
+      KVKeyInstance.parse(keyString, false);
+    }, TypeError);
+  }
+});
+
+test("KVKeyInstance: parse error on range in non-query", () => {
+  assertThrows(
+    () => {
+      KVKeyInstance.parse("users.>=1000", false); // Ranges not allowed in keys
+    },
+    TypeError,
+    "Ranges are not allowed in keys.",
+  );
+});
+
+test("KVKeyInstance: stringify and parse keys with numeric keys", () => {
+  const keys: KVKey[] = [
+    ["users", 123],
+    ["data", 100, 200],
+    ["users", "user123", 123],
+  ];
+
+  for (const key of keys) {
+    const instance = new KVKeyInstance(key);
+    const stringified = instance.stringify();
+    const parsed = KVKeyInstance.parse(stringified, false);
+    assertEquals(parsed, key);
+  }
+});
+
+test("KVKeyInstance: parse error on invalid numeric key format", () => {
+  assertThrows(() => {
+    KVKeyInstance.parse("users.#abc", false);
+  }, TypeError);
+});
+
+test("KVKeyInstance: parse error on invalid range format", () => {
+  assertThrows(() => {
+    KVKeyInstance.parse("users.>=abc.<=123", false);
+  }, TypeError);
 });

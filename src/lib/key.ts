@@ -1,5 +1,28 @@
 import { KV_KEY_ALLOWED_CHARS } from "./constants.ts";
 
+// Helper function to stringify range values correctly
+function stringifyRangeValue(value: string | number): string {
+  if (typeof value === "string") {
+    return value; // No changes needed for string values
+  } else { // Number
+    return `#${value}`;
+  }
+}
+
+// Parse value
+function parseValue(v: string): string | number {
+  if (v.substring(0, 1) === "#") {
+    const parsed = parseInt(v.substring(1), 10);
+    if (isNaN(parsed)) {
+      throw new TypeError(`Invalid numeric key element: ${parsed}`);
+    } else {
+      return parsed;
+    }
+  } else {
+    return v;
+  }
+}
+
 /**
  * Represents a range within a query.
  */
@@ -42,11 +65,12 @@ export type KVQuery = (string | number | KVQueryRange)[];
  */
 export class KVKeyInstance {
   private key: KVQuery | KVKey;
+  private isQuery: boolean;
   public byteLength?: number;
   hasData: boolean = false;
   constructor(
     key: KVQuery | KVKey | Uint8Array | DataView,
-    allowRange: boolean = false,
+    isQuery: boolean = false,
     validate: boolean = true,
   ) {
     if (key instanceof Uint8Array) {
@@ -61,7 +85,9 @@ export class KVKeyInstance {
       this.key = key;
     }
 
-    if (validate) this.validateKey(allowRange);
+    this.isQuery = isQuery;
+
+    if (validate) this.validate();
   }
 
   /**
@@ -87,7 +113,7 @@ export class KVKeyInstance {
         new DataView(numBytes.buffer).setFloat64(0, element, false);
         keyBytesArray.push(numBytes);
       } else {
-        // This should never happen if validateKey() is working correctly
+        // This should never happen if validate() is working correctly
         throw new TypeError("Invalid key element type");
       }
     }
@@ -164,10 +190,9 @@ export class KVKeyInstance {
   /**
    * Validates the key representation against the defined rules.
    *
-   * @param query - Whether to allow key ranges within the representation.
    * @throws {TypeError} If the key is invalid.
    */
-  private validateKey(query: boolean): void {
+  private validate(): void {
     if (!Array.isArray(this.key)) {
       throw new TypeError("Key must be an array");
     }
@@ -181,7 +206,7 @@ export class KVKeyInstance {
     }
 
     for (const element of this.key) {
-      if (typeof element === "object" && !query) {
+      if (typeof element === "object" && !this.isQuery) {
         throw new TypeError("Key ranges are only allowed in queries");
       }
 
@@ -217,17 +242,66 @@ export class KVKeyInstance {
     }
   }
 
-  /**
-   * Gets a string representation of the key (without ranges).
-   *
-   * @throws {Error} If the key contains ranges.
-   */
-  public getKeyRepresentation(): string {
-    if (this.key.some((element) => typeof element === "object")) {
-      throw new Error("getKeyRepresentation does not support keys with ranges");
+  public stringify(): string {
+    return this.key.map((element) => {
+      if (typeof element === "string") {
+        if (element.startsWith("#")) {
+          throw new Error("String key elements cannot start with '#'");
+        }
+        return element;
+      } else if (typeof element === "number") {
+        return `#${element}`;
+      } else if (typeof element === "object") { // Range
+        const from = element.from !== undefined
+          ? `>=${stringifyRangeValue(element.from)}`
+          : "";
+        const to = element.to !== undefined
+          ? `<=${stringifyRangeValue(element.to)}`
+          : "";
+        return `${from}${to}`;
+      } else {
+        throw new Error("Unsupported key element type");
+      }
+    }).join(".");
+  }
+
+  public static parse(queryString: string, isQuery: boolean): KVKey | KVQuery {
+    const elements = queryString.split(".");
+    const result: KVQuery = [];
+
+    const rangeRegex = /^(>=(#?[\w@-]+))?(<=(#?[\w@-]+))?$/;
+
+    for (const element of elements) {
+      if (element === "") { // Handle empty elements as empty objects
+        result.push({});
+      } else {
+        const rangeMatch = element.match(rangeRegex);
+        if (rangeMatch) {
+          if (!isQuery) {
+            throw new TypeError("Ranges are not allowed in keys.");
+          }
+          result.push({
+            from: rangeMatch[2] ? parseValue(rangeMatch[2]) : undefined,
+            to: rangeMatch[4] ? parseValue(rangeMatch[4]) : undefined,
+          });
+        } else {
+          const parsed = parseValue(element);
+          if (
+            typeof parsed === "string" && !KV_KEY_ALLOWED_CHARS.test(parsed)
+          ) {
+            throw new TypeError(
+              `Invalid characters in string key element: ${parsed}`,
+            );
+          }
+          result.push(parsed);
+        }
+      }
     }
 
-    return this.key.join(".");
+    const instance = new KVKeyInstance(result, isQuery);
+    instance.validate();
+
+    return isQuery ? result : result as KVKey;
   }
 
   /**
@@ -288,7 +362,6 @@ export class KVKeyInstance {
       if (recursive && thisKey.length > i + 1) {
         const subquery = query.slice(i + 1);
         const subkey = thisKey.slice(i + 1);
-
         if (
           !new KVKeyInstance(subkey, true).matchesQuery(subquery, recursive)
         ) {

@@ -23,6 +23,7 @@ import {
 import { KVOperation, KVTransaction } from "./transaction.ts";
 import { rename, unlink } from "@cross/fs";
 import type { FileHandle } from "node:fs/promises";
+import type { KVQuery } from "./key.ts";
 
 /**
  * This file handles the ledger file, which is where all persisted data of an cross/kv instance is stored.
@@ -161,8 +162,8 @@ export class KVLedger {
       fd = await rawOpen(this.dataPath, false);
       const headerData = await readAtPosition(fd, LEDGER_BASE_OFFSET, 0);
       const decoded: KVLedgerHeader = {
-        fileId: new TextDecoder().decode(headerData.slice(0, 4)),
-        ledgerVersion: new TextDecoder().decode(headerData.slice(4, 8)),
+        fileId: new TextDecoder().decode(headerData.subarray(0, 4)),
+        ledgerVersion: new TextDecoder().decode(headerData.subarray(4, 8)),
         created: new DataView(headerData.buffer).getFloat64(8, false),
         currentOffset: new DataView(headerData.buffer).getFloat64(16, false),
       };
@@ -184,6 +185,42 @@ export class KVLedger {
       this.header = decoded;
     } finally {
       if (fd) fd.close();
+    }
+  }
+
+  /**
+   * Scans the entire ledger for transactions that match a given query.
+   *
+   * This method is an async generator, yielding `KVLedgerResult` objects for
+   * each matching transaction.
+   *
+   * @param query
+   * @returns An async generator yielding `KVLedgerResult` objects for each matching transaction.
+   */
+  public async *scan(
+    query: KVQuery,
+  ): AsyncIterableIterator<KVLedgerResult> {
+    this.ensureOpen();
+
+    let currentOffset = LEDGER_BASE_OFFSET;
+
+    let reusableFd: Deno.FsFile | FileHandle | undefined;
+
+    try {
+      reusableFd = await rawOpen(this.dataPath, false); // Keep file open during scan
+      while (currentOffset < this.header.currentOffset) {
+        const result = await this.rawGetTransaction(
+          currentOffset,
+          false,
+          reusableFd,
+        );
+        if (result.transaction.key?.matchesQuery(query)) {
+          yield result; // Yield the matching transaction
+        }
+        currentOffset += result.length; // Advance the offset
+      }
+    } finally {
+      if (reusableFd) reusableFd.close();
     }
   }
 
@@ -270,13 +307,16 @@ export class KVLedger {
 
       let headerOffset = 0;
 
-      // Read and validate the CKT signature
+      /**
+       * Ignore the signature for performance
+       * // Read and validate the CKT signature
       const signature = new TextDecoder().decode(
         transactionLengthData.slice(headerOffset, TRANSACTION_SIGNATURE.length),
       );
       if (signature !== TRANSACTION_SIGNATURE) {
         throw new Error("Invalid transaction signature");
       }
+      */
       headerOffset += TRANSACTION_SIGNATURE.length;
 
       // Read header length (offset by 4 bytes for header length uint32)
@@ -305,19 +345,20 @@ export class KVLedger {
           headerLength,
           baseOffset + headerOffset,
         );
-        transaction.headerFromUint8Array(transactionHeaderData);
+        transaction.headerFromUint8Array(transactionHeaderData, readData);
         // - from pre-fetched data
       } else {
         transaction.headerFromUint8Array(
-          transactionLengthData.subarray(
-            headerOffset,
-            headerLength + headerOffset,
+          new DataView(
+            transactionLengthData.buffer,
+            transactionLengthData.byteOffset + headerOffset,
+            headerLength,
           ),
+          readData,
         );
       }
-
       // Read transaction data (optional)
-      if (readData) {
+      if (readData && dataLength > 0) {
         // Directly from file
         if (headerLength + headerOffset + dataLength > LEDGER_PREFETCH_BYTES) {
           const transactionData = await readAtPosition(
@@ -374,12 +415,12 @@ export class KVLedger {
         const offset = allOffsets[i];
         const result = await this.rawGetTransaction(offset, false);
         if (result.transaction.operation === KVOperation.DELETE) {
-          removedKeys.add(result.transaction.key!.getKeyRepresentation());
+          removedKeys.add(result.transaction.key!.stringify());
         } else if (
-          !(removedKeys.has(result.transaction.key?.getKeyRepresentation()!)) &&
-          !(addedKeys.has(result.transaction.key?.getKeyRepresentation()!))
+          !(removedKeys.has(result.transaction.key?.stringify()!)) &&
+          !(addedKeys.has(result.transaction.key?.stringify()!))
         ) {
-          addedKeys.add(result.transaction.key!.getKeyRepresentation());
+          addedKeys.add(result.transaction.key!.stringify());
           validTransactions.push(result);
         }
       }

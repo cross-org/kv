@@ -104,7 +104,7 @@ export interface KVTransactionResult<T> {
    * The hash of the raw transaction data. This can be used for
    * verification and integrity checks.
    */
-  hash: Uint8Array;
+  hash: Uint8Array | null;
 }
 
 // Concrete implementation of the KVTransaction interface
@@ -139,8 +139,11 @@ export class KVTransaction {
     }
   }
 
-  public headerFromUint8Array(data: Uint8Array) {
-    const dataView = new DataView(
+  public headerFromUint8Array(
+    data: Uint8Array | DataView,
+    readHash: boolean = true,
+  ) {
+    const dataView = data instanceof DataView ? data : new DataView(
       data.buffer,
       data.byteOffset,
       data.byteLength,
@@ -164,7 +167,14 @@ export class KVTransaction {
     offset += 4;
 
     // Decode hash bytes
-    this.hash = data.subarray(offset, offset + hashLength);
+    if (readHash) {
+      this.hash = new Uint8Array(
+        dataView.buffer.slice(
+          dataView.byteOffset + offset,
+          dataView.byteOffset + offset + hashLength,
+        ),
+      );
+    }
     offset += hashLength;
 
     // Do not allow extra data
@@ -257,8 +267,7 @@ export class KVTransaction {
    */
   public asResult<T>(): KVTransactionResult<T> {
     if (
-      this.operation === undefined || this.timestamp === undefined ||
-      this.hash === undefined
+      this.operation === undefined || this.timestamp === undefined
     ) {
       throw new Error(
         "Incomplete transaction cannot be converted to a result.",
@@ -269,7 +278,7 @@ export class KVTransaction {
       operation: this.operation,
       timestamp: this.timestamp,
       data: this.getData() as T,
-      hash: this.hash,
+      hash: this.hash || null,
     };
   }
 }

@@ -1,3 +1,15 @@
+## 0.14.0
+
+- Cli-tool `ckv` now included in `@cross/kv` through export `@cross/kv/cli`
+  - Install with `deno install -A -g -n ckv jsr:@cross/kv/cli` and run `ckv`
+  - Run without installing with `deno run -A jsr:@cross/kv/cli`
+
+## Other changes
+
+- Renamed `key.toStringRepresentation()` to `.stringify()`
+- Added static function `KVKeyImplementation.parse()` which returns a `KVKey`.
+- Various internal optiomizations
+
 ## 0.13.2
 
 - Be more graceful when closing

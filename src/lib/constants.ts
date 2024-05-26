@@ -9,7 +9,7 @@ export const SUPPORTED_LEDGER_VERSIONS: string[] = [
   "B012",
 ];
 export const LEDGER_MAX_READ_FAILURES = 10;
-export const LEDGER_PREFETCH_BYTES = 2_048;
+export const LEDGER_PREFETCH_BYTES = 256;
 export const SYNC_INTERVAL_MS = 2_500; // Overridable with instance configuration
 
 // Extremely constant

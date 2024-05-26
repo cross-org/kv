@@ -241,7 +241,7 @@ export class KV extends EventEmitter {
    *
    * @throws {Error} If an unexpected error occurs during synchronization.
    */
-  public async sync(force = false, doLock = true): Promise<KVSyncResult> {
+  public async sync(force = false, doLock = false): Promise<KVSyncResult> {
     // Throw if database isn't open
     if (force) this.ensureOpen();
 
@@ -291,6 +291,24 @@ export class KV extends EventEmitter {
     }
 
     return { result, error };
+  }
+
+  /**
+   * Asynchronously iterates over data entries associated with a given key.
+   *
+   * @param query - Representation of the key to search for, or a query object for complex filters.
+   * @returns An async generator yielding `KVTransactionResult` objects for each matching entry.
+   */
+  public async *scan<T = unknown>(
+    query: KVKey | KVQuery,
+  ): AsyncGenerator<KVTransactionResult<T>> {
+    this.ensureOpen();
+    for await (const result of this.ledger!.scan(query)) {
+      if (result?.transaction) { // Null check to ensure safety
+        const processedResult = result.transaction.asResult<T>(); // Apply your processing logic here
+        yield processedResult;
+      }
+    }
   }
 
   /**
@@ -501,7 +519,6 @@ export class KV extends EventEmitter {
   public async set<T = unknown>(key: KVKey, value: T): Promise<void> {
     // Throw if database isn't open
     this.ensureOpen();
-
     // Throw if there is an ongoing vacuum
     if (this.blockSync) {
       throw new Error("Can not add data during vacuuming");
@@ -511,13 +528,14 @@ export class KV extends EventEmitter {
     const validatedKey = new KVKeyInstance(key);
 
     const transaction = new KVTransaction();
+
+    performance.mark("b");
     await transaction.create(
       validatedKey,
       KVOperation.SET,
       Date.now(),
       value,
     );
-
     // Enqueue transaction
     if (!this.isInTransaction) {
       this.beginTransaction();
@@ -573,6 +591,7 @@ export class KV extends EventEmitter {
 
     const bufferedTransactions: {
       transaction: KVTransaction;
+      transactionData: Uint8Array;
       relativeOffset: number;
     }[] = [];
     const errors: Error[] = [];
@@ -581,8 +600,22 @@ export class KV extends EventEmitter {
     let currentOffset = 0;
     for (const transaction of this.pendingTransactions) {
       const transactionData = await transaction.toUint8Array();
-      bufferedTransactions.push({ transaction, relativeOffset: currentOffset });
+      bufferedTransactions.push({
+        transaction,
+        transactionData,
+        relativeOffset: currentOffset,
+      });
       currentOffset += transactionData.length;
+    }
+
+    // Convert buffered transactions to Uint8Array[]
+    const transactionsData = new Uint8Array(currentOffset);
+    currentOffset = 0;
+    for (const transaction of bufferedTransactions) {
+      transactionsData.set(
+        transaction.transactionData,
+        transaction.relativeOffset,
+      );
     }
 
     await this.ledger!.lock();
@@ -594,8 +627,8 @@ export class KV extends EventEmitter {
       }
 
       // Convert buffered transactions to Uint8Array[]
-      const transactionsData = bufferedTransactions.map(({ transaction }) =>
-        transaction.toUint8Array()
+      const transactionsData = bufferedTransactions.map(({ transactionData }) =>
+        transactionData
       );
 
       // Write all buffered transactions at once and get the base offset
@@ -642,7 +675,7 @@ export class KV extends EventEmitter {
    * @returns An array of strings representing the immediate child keys.
    *          If the key doesn't exist or has no children, an empty array is returned.
    */
-  public listKeys(key: KVKey | null): string[] {
+  public listKeys(key: KVKey | KVQuery | null): string[] {
     // Throw if database isn't open
     this.ensureOpen();
 

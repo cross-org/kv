@@ -1,9 +1,9 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { test } from "@cross/test";
-import { KV, type KVOptions } from "../src/kv.ts";
+import { KV, type KVOptions } from "../src/lib/kv.ts";
 import { tempfile } from "@cross/fs";
-import { SYNC_INTERVAL_MS } from "../src/constants.ts";
-import type { KVTransactionResult } from "../src/transaction.ts";
+import { SYNC_INTERVAL_MS } from "../src/lib/constants.ts";
+import type { KVTransactionResult } from "../src/lib/transaction.ts";
 import type { KVQuery } from "../mod.ts";
 
 test("KV: set, get and delete (numbers and strings)", async () => {

@@ -1,11 +1,11 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { test } from "@cross/test";
 import { tempfile } from "@cross/fs";
-import { KVLedger } from "../src/ledger.ts";
+import { KVLedger } from "../src/lib/ledger.ts";
 import {
   LEDGER_BASE_OFFSET,
   LEDGER_CURRENT_VERSION,
-} from "../src/constants.ts";
+} from "../src/lib/constants.ts";
 
 test("KVLedger: readHeader - valid header", async () => {
   // Arrange: Create a temporary ledger file with a valid header
