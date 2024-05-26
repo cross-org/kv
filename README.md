@@ -38,7 +38,7 @@ Command line client `ckv`:
 
 ```bash
 # Install
-# deno install -frA --name ckv jsr:@cross/kv/cli
+# deno install -frgA --name ckv jsr:@cross/kv/cli
 
 # Run without installing
 deno run -A jsr:@cross/kv/cli
