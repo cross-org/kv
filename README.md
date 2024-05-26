@@ -6,6 +6,8 @@ Deno, and Bun.
 [![JSR](https://jsr.io/badges/@cross/kv)](https://jsr.io/@cross/kv)
 [![JSR Score](https://jsr.io/badges/@cross/kv/score)](https://jsr.io/@cross/kv)
 
+Library usage:
+
 ```typescript
 import { KV } from "@cross/kv";
 
@@ -32,6 +34,33 @@ console.log(await db.listAll(["users", { to: 10 }, "contact"]));
 db.close();
 ```
 
+Command line client `ckv`:
+
+```bash
+# Install
+# deno install -frA --name ckv jsr:@cross/kv/cli
+
+# Run without installing
+deno run -A jsr:@cross/kv/cli
+
+> open my.db
+Success [10.30 ms]
+
+> set:json my.key {"hello":"kv"}
+Success [31.70 ms]
+
+> get my.key
+
+Key:             ["my","key"]
+Operation:       SET (1)
+Timestamp:       2024-05-26T19:49:49.471Z
+Hash:            abdf6eb7a3fe04af920f31a599ce0cc069d29041
+
+{ hello: "kv" }
+
+Success [7.74 ms]
+```
+
 ## Features
 
 - **Cross-Platform & Multi-Process:** Built with pure TypeScript for seamless
@@ -53,6 +82,8 @@ db.close();
 
 ## Installation
 
+Library:
+
 ```bash
 # Using npm
 npx jsr add @cross/kv
@@ -62,6 +93,13 @@ deno add @cross/kv
 
 # Using bun
 bunx jsr add @cross/kv
+```
+
+Command line client `ckv`:
+
+```bash
+# Using Deno
+deno install -frA --name ckv jsr:@cross/kv/cli
 ```
 
 ## API Documentation

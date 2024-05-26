@@ -8,7 +8,6 @@ import {
 import { KVKeyInstance, type KVQuery } from "../../lib/key.ts";
 import { KVOperation } from "../../lib/transaction.ts";
 import { Colors } from "@cross/utils";
-import { toHexString } from "../common.ts";
 
 export async function scan(
   container: KVDBContainer,
