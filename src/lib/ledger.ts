@@ -7,6 +7,7 @@ import {
 } from "./utils/file.ts";
 import {
   LEDGER_BASE_OFFSET,
+  LEDGER_CACHE_MB,
   LEDGER_CURRENT_VERSION,
   LEDGER_FILE_ID,
   LEDGER_MAX_READ_FAILURES,
@@ -55,8 +56,14 @@ interface KVLedgerResult {
 }
 
 export class KVLedger {
+  // States
   private opened: boolean = false;
   private dataPath: string;
+
+  // Cache
+  private cache: Map<number, KVTransaction> = new Map();
+  private cacheSizeBytes = 0;
+
   public header: KVLedgerHeader = {
     fileId: LEDGER_FILE_ID,
     ledgerVersion: LEDGER_CURRENT_VERSION,
@@ -132,6 +139,7 @@ export class KVLedger {
             false,
             reusableFd,
           );
+
           newTransactions.push(result); // Add the    transaction
           currentOffset += result.length; // Advance the offset
           failures = 0;
@@ -145,6 +153,24 @@ export class KVLedger {
       if (reusableFd) reusableFd.close();
     }
     return newTransactions;
+  }
+
+  public cacheTransactionData(
+    offset: number,
+    transaction: KVTransaction,
+  ): void {
+    if (!this.cache.has(offset)) {
+      this.cache.set(offset, transaction);
+      this.cacheSizeBytes += transaction.toUint8Array().length;
+
+      // Evict oldest entries if cache exceeds maximum size
+      while (this.cacheSizeBytes > LEDGER_CACHE_MB * 1024 * 1024) {
+        const oldestOffset = this.cache.keys().next().value;
+        const oldestData = this.cache.get(oldestOffset)!;
+        this.cache.delete(oldestOffset);
+        this.cacheSizeBytes -= oldestData.toUint8Array().length;
+      }
+    }
   }
 
   /**
@@ -291,6 +317,17 @@ export class KVLedger {
     externalFd?: Deno.FsFile | FileHandle,
   ): Promise<KVLedgerResult> {
     this.ensureOpen();
+
+    // Check cache first
+    if (this.cache.has(baseOffset)) {
+      const cachedTransaction = this.cache.get(baseOffset)!;
+      return {
+        offset: baseOffset,
+        length: cachedTransaction.toUint8Array().length,
+        transaction: cachedTransaction,
+      };
+    }
+
     let fd = externalFd;
     try {
       if (!externalFd) fd = await rawOpen(this.dataPath, false);
@@ -298,7 +335,7 @@ export class KVLedger {
       // Fetch 2 + 4 + 4 bytes (signature, header length, data length) + prefetch
       const transactionLengthData = await readAtPosition(
         fd!,
-        TRANSACTION_SIGNATURE.length + 4 + 4 + LEDGER_PREFETCH_BYTES, // Updated to include 3 bytes for signature
+        TRANSACTION_SIGNATURE.length + 4 + 4,
         baseOffset,
       );
       const transactionLengthDataView = new DataView(
@@ -307,16 +344,6 @@ export class KVLedger {
 
       let headerOffset = 0;
 
-      /**
-       * Ignore the signature for performance
-       * // Read and validate the CKT signature
-      const signature = new TextDecoder().decode(
-        transactionLengthData.slice(headerOffset, TRANSACTION_SIGNATURE.length),
-      );
-      if (signature !== TRANSACTION_SIGNATURE) {
-        throw new Error("Invalid transaction signature");
-      }
-      */
       headerOffset += TRANSACTION_SIGNATURE.length;
 
       // Read header length (offset by 4 bytes for header length uint32)
@@ -336,46 +363,24 @@ export class KVLedger {
       const transaction = new KVTransaction();
 
       // Read transaction header
-      let transactionHeaderData;
+      const transactionHeaderData = await readAtPosition(
+        fd!,
+        headerLength,
+        baseOffset + headerOffset,
+      );
+      transaction.headerFromUint8Array(transactionHeaderData, readData);
 
-      // - directly from file
-      if (headerLength + headerOffset > LEDGER_PREFETCH_BYTES) {
-        transactionHeaderData = await readAtPosition(
-          fd!,
-          headerLength,
-          baseOffset + headerOffset,
-        );
-        transaction.headerFromUint8Array(transactionHeaderData, readData);
-        // - from pre-fetched data
-      } else {
-        transaction.headerFromUint8Array(
-          new DataView(
-            transactionLengthData.buffer,
-            transactionLengthData.byteOffset + headerOffset,
-            headerLength,
-          ),
-          readData,
-        );
-      }
       // Read transaction data (optional)
       if (readData && dataLength > 0) {
-        // Directly from file
-        if (headerLength + headerOffset + dataLength > LEDGER_PREFETCH_BYTES) {
-          const transactionData = await readAtPosition(
-            fd!,
-            dataLength,
-            baseOffset + headerOffset + headerLength,
-          );
-          await transaction.dataFromUint8Array(transactionData);
-          // From pre-fetched data
-        } else {
-          await transaction.dataFromUint8Array(
-            transactionLengthData.slice(
-              headerLength + headerOffset,
-              headerLength + headerOffset + dataLength,
-            ),
-          );
-        }
+        const transactionData = await readAtPosition(
+          fd!,
+          dataLength,
+          baseOffset + headerOffset + headerLength,
+        );
+        await transaction.dataFromUint8Array(transactionData);
+
+        // Cache complete transaction
+        this.cacheTransactionData(baseOffset, transaction);
       }
       return {
         offset: baseOffset,

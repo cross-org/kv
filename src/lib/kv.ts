@@ -637,6 +637,13 @@ export class KV extends EventEmitter {
       // Update the index and check for errors
       for (const { transaction, relativeOffset } of bufferedTransactions) {
         try {
+          // Add to ledger cache
+          this.ledger!.cacheTransactionData(
+            baseOffset + relativeOffset,
+            transaction,
+          );
+
+          // Add to index
           this.applyTransactionToIndex(
             transaction,
             baseOffset + relativeOffset,
