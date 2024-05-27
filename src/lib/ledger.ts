@@ -53,6 +53,7 @@ interface KVLedgerResult {
   offset: number;
   length: number;
   transaction: KVTransaction;
+  complete: boolean;
 }
 
 export class KVLedger {
@@ -61,7 +62,7 @@ export class KVLedger {
   private dataPath: string;
 
   // Cache
-  private cache: Map<number, KVTransaction> = new Map();
+  private cache: Map<number, KVLedgerResult> = new Map();
   private cacheSizeBytes = 0;
 
   public header: KVLedgerHeader = {
@@ -157,18 +158,17 @@ export class KVLedger {
 
   public cacheTransactionData(
     offset: number,
-    transaction: KVTransaction,
+    transaction: KVLedgerResult,
   ): void {
     if (!this.cache.has(offset)) {
       this.cache.set(offset, transaction);
-      this.cacheSizeBytes += transaction.toUint8Array().length;
-
+      this.cacheSizeBytes += transaction.length;
       // Evict oldest entries if cache exceeds maximum size
       while (this.cacheSizeBytes > LEDGER_CACHE_MB * 1024 * 1024) {
         const oldestOffset = this.cache.keys().next().value;
         const oldestData = this.cache.get(oldestOffset)!;
         this.cache.delete(oldestOffset);
-        this.cacheSizeBytes -= oldestData.toUint8Array().length;
+        this.cacheSizeBytes -= oldestData.length;
       }
     }
   }
@@ -319,13 +319,9 @@ export class KVLedger {
     this.ensureOpen();
 
     // Check cache first
-    if (this.cache.has(baseOffset)) {
-      const cachedTransaction = this.cache.get(baseOffset)!;
-      return {
-        offset: baseOffset,
-        length: cachedTransaction.toUint8Array().length,
-        transaction: cachedTransaction,
-      };
+    const cachedResult = this.cache.get(baseOffset);
+    if (cachedResult && (!readData || cachedResult.complete)) {
+      return cachedResult;
     }
 
     let fd = externalFd;
@@ -371,6 +367,7 @@ export class KVLedger {
       transaction.headerFromUint8Array(transactionHeaderData, readData);
 
       // Read transaction data (optional)
+      const complete = readData || !(dataLength > 0);
       if (readData && dataLength > 0) {
         const transactionData = await readAtPosition(
           fd!,
@@ -378,15 +375,20 @@ export class KVLedger {
           baseOffset + headerOffset + headerLength,
         );
         await transaction.dataFromUint8Array(transactionData);
-
-        // Cache complete transaction
-        this.cacheTransactionData(baseOffset, transaction);
       }
-      return {
+
+      // Get transaction result
+      const result = {
         offset: baseOffset,
         length: headerOffset + headerLength + dataLength,
+        complete: complete,
         transaction,
       };
+
+      // Cache transaction
+      this.cacheTransactionData(baseOffset, result);
+
+      return result;
     } finally {
       if (fd && !externalFd) fd.close();
     }
@@ -430,12 +432,15 @@ export class KVLedger {
         }
       }
 
-      // 4. Compact the Data File
+      // 4. Clear cache
+      this.cache.clear();
+
+      // 5. Compact the Data File
       const tempFilePath = this.dataPath + "-tmp";
       const tempLedger = new KVLedger(tempFilePath);
       await tempLedger.open(true);
 
-      // Append valid transactions to the new file.
+      // 6. Append valid transactions to the new file.
       for (const validTransaction of validTransactions) {
         const transaction = await this.rawGetTransaction(
           validTransaction.offset,
@@ -445,14 +450,14 @@ export class KVLedger {
       }
       this.header.currentOffset = tempLedger.header.currentOffset;
 
-      // 5. Replace Original File
+      // 7. Replace Original File
       await unlink(this.dataPath);
       await rename(tempFilePath, this.dataPath);
 
-      // 6. Update the Cached Header
+      // 8. Update the Cached Header
       await this.readHeader();
     } finally {
-      // 7. Unlock
+      // 9. Unlock
       await this.unlock();
     }
   }
