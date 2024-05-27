@@ -9,7 +9,7 @@ import {
   type KVTransactionResult,
 } from "./transaction.ts";
 import { KVLedger } from "./ledger.ts";
-import { SYNC_INTERVAL_MS } from "./constants.ts";
+import { LEDGER_CACHE_MB, SYNC_INTERVAL_MS } from "./constants.ts";
 
 // External dependencies
 import { EventEmitter } from "node:events";
@@ -82,6 +82,15 @@ export interface KVOptions {
    * @defaultValue `1000`
    */
   syncIntervalMs?: number;
+
+  /**
+   * The maximum size (in megabytes) of raw ledger data to cache in memory.
+   *
+   * Note that actual memory usage may be slightly higher due to the associated overhead of storing index data and metadata.
+   *
+   * @defaultValue `10` (10 MB)
+   */
+  ledgerCacheSize?: number;
 }
 
 /**
@@ -99,6 +108,7 @@ export class KV extends EventEmitter {
 
   // Configuration
   private ledgerPath?: string;
+  private ledgerCacheSize: number = LEDGER_CACHE_MB;
   /** Public only for testing purposes */
   public autoSync: boolean = true;
   /** Public only for testing purposes */
@@ -139,6 +149,17 @@ export class KV extends EventEmitter {
       );
     }
     this.syncIntervalMs = options.syncIntervalMs ?? SYNC_INTERVAL_MS;
+    // - ledgerCacheSize
+    if (
+      options.ledgerCacheSize !== undefined &&
+      (!Number.isInteger(options.ledgerCacheSize) ||
+        options.ledgerCacheSize <= 0)
+    ) {
+      throw new TypeError(
+        "Invalid option: ledgerCacheSize must be a positive integer",
+      );
+    }
+    this.ledgerCacheSize = options.ledgerCacheSize ?? this.ledgerCacheSize;
 
     if (this.autoSync) {
       this.watchdogPromise = this.watchdog();
@@ -166,7 +187,7 @@ export class KV extends EventEmitter {
     }
 
     // Open the ledger, and start a new watchdog
-    this.ledger = new KVLedger(filePath);
+    this.ledger = new KVLedger(filePath, this.ledgerCacheSize);
     this.ledgerPath = filePath;
     await this.ledger.open(createIfMissing);
 

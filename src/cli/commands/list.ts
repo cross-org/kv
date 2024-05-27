@@ -3,7 +3,6 @@ import {
   ensureOpen,
   hasParameter,
   type KVDBContainer,
-  userInput,
 } from "../common.ts";
 import { KVKeyInstance, type KVQuery } from "../../lib/key.ts";
 
@@ -16,17 +15,17 @@ export async function list(
 
   let query: KVQuery;
   if (hasParameter(params, 0)) {
-    query = KVKeyInstance.parse(params[0], true); // Query parsing
+    // Validate query
+    query = new KVKeyInstance(KVKeyInstance.parse(params[0], true)).get();
   } else {
-    const queryInput = userInput("Enter query (dot separated): ");
-    if (!queryInput) return false; // Exit if no query provided
-    query = KVKeyInstance.parse(queryInput, true);
+    console.error("No query supplied.");
+    return false;
   }
 
   console.log("");
 
   // Iterate over matching entries
-  for await (const entry of container.db!.iterate(query)) {
+  for await (const entry of container.db!.iterate(query, 100)) {
     // Display key information
     const key = new KVKeyInstance(entry.key).stringify();
     console.log(key, entry.data);

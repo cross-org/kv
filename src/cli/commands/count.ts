@@ -3,10 +3,10 @@ import {
   ensureOpen,
   hasParameter,
   type KVDBContainer,
-  userInput,
 } from "../common.ts";
-import { KVKeyInstance, type KVQuery } from "../../lib/key.ts";
+import { KVKeyInstance } from "../../lib/key.ts";
 
+// deno-lint-ignore require-await
 export async function count(
   container: KVDBContainer,
   params: string[],

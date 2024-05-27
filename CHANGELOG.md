@@ -1,3 +1,7 @@
+## 0.14.1
+
+- Add in-memory cache for ledger
+
 ## 0.14.0
 
 - Cli-tool `ckv` now included in `@cross/kv` through export `@cross/kv/cli`

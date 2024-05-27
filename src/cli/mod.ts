@@ -12,7 +12,7 @@ import {
 } from "./commands/set.ts";
 import { del } from "./commands/delete.ts";
 import { list } from "./commands/list.ts";
-import { listKeys } from "./commands/listkeys.ts";
+import { listKeys } from "./commands/keys.ts";
 import { scan } from "./commands/scan.ts";
 import { sysinfo } from "./commands/sysinfo.ts";
 import { count } from "./commands/count.ts";

@@ -7,11 +7,9 @@ import {
 } from "./utils/file.ts";
 import {
   LEDGER_BASE_OFFSET,
-  LEDGER_CACHE_MB,
   LEDGER_CURRENT_VERSION,
   LEDGER_FILE_ID,
   LEDGER_MAX_READ_FAILURES,
-  LEDGER_PREFETCH_BYTES,
   LOCK_BYTE_OFFSET,
   LOCK_DEFAULT_INITIAL_RETRY_INTERVAL_MS,
   LOCK_DEFAULT_MAX_RETRIES,
@@ -64,6 +62,7 @@ export class KVLedger {
   // Cache
   private cache: Map<number, KVLedgerResult> = new Map();
   private cacheSizeBytes = 0;
+  private maxCacheSizeBytes: number;
 
   public header: KVLedgerHeader = {
     fileId: LEDGER_FILE_ID,
@@ -72,8 +71,9 @@ export class KVLedger {
     currentOffset: LEDGER_BASE_OFFSET,
   };
 
-  constructor(filePath: string) {
+  constructor(filePath: string, maxCacheSizeMBytes: number) {
     this.dataPath = toAbsolutePath(filePath);
+    this.maxCacheSizeBytes = maxCacheSizeMBytes * 1024 * 1024;
   }
 
   /**
@@ -164,7 +164,7 @@ export class KVLedger {
       this.cache.set(offset, transaction);
       this.cacheSizeBytes += transaction.length;
       // Evict oldest entries if cache exceeds maximum size
-      while (this.cacheSizeBytes > LEDGER_CACHE_MB * 1024 * 1024) {
+      while (this.cacheSizeBytes > this.maxCacheSizeBytes) {
         const oldestOffset = this.cache.keys().next().value;
         const oldestData = this.cache.get(oldestOffset)!;
         this.cache.delete(oldestOffset);
@@ -437,7 +437,10 @@ export class KVLedger {
 
       // 5. Compact the Data File
       const tempFilePath = this.dataPath + "-tmp";
-      const tempLedger = new KVLedger(tempFilePath);
+      const tempLedger = new KVLedger(
+        tempFilePath,
+        this.maxCacheSizeBytes / 1024 / 1024,
+      );
       await tempLedger.open(true);
 
       // 6. Append valid transactions to the new file.
