@@ -413,7 +413,6 @@ export class KV extends EventEmitter {
   ): Promise<KVTransactionResult<T> | null> {
     // Throw if database isn't open
     this.ensureOpen();
-
     for await (const entry of this.iterate<T>(key, 1)) {
       return entry;
     }

@@ -201,7 +201,7 @@ export class KVKeyInstance {
       throw new TypeError("Key cannot be empty");
     }
 
-    if (typeof this.key[0] !== "string") {
+    if (typeof this.key[0] !== "string" && !this.isQuery) {
       throw new TypeError("First index of the key must be a string");
     }
 

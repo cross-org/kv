@@ -15,6 +15,7 @@ import { list } from "./commands/list.ts";
 import { listKeys } from "./commands/listkeys.ts";
 import { scan } from "./commands/scan.ts";
 import { sysinfo } from "./commands/sysinfo.ts";
+import { count } from "./commands/count.ts";
 
 registerCommand("help", help);
 registerCommand("open", open);
@@ -29,5 +30,6 @@ registerCommand("set:date", setDate);
 registerCommand("set:boolean", setBoolean);
 registerCommand("del", del);
 registerCommand("sysinfo", sysinfo);
+registerCommand("count", count);
 
 main();
