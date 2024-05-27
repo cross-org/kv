@@ -17,6 +17,10 @@ import { scan } from "./commands/scan.ts";
 import { sysinfo } from "./commands/sysinfo.ts";
 import { count } from "./commands/count.ts";
 
+import packageJson from "../../deno.json" with { type: "json" };
+import { Colors } from "@cross/utils";
+console.log(`@cross/kv ${Colors.dim(`v${packageJson.version}`)}`);
+
 registerCommand("help", help);
 registerCommand("open", open);
 registerCommand("get", get);
