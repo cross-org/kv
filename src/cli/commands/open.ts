@@ -40,3 +40,26 @@ export async function open(
     return false;
   }
 }
+
+export async function openNoIndex(
+  container: KVDBContainer,
+  params: string[],
+): Promise<boolean> {
+  if (!ensureClosed(container)) return false;
+  if (!ensureMaxParameters(params, 1)) return false;
+  let dbPath;
+  if (hasParameter(params, 0)) {
+    dbPath = params[0];
+  } else {
+    console.error(Colors.red("No database specified."));
+    return false;
+  }
+  container.db = new KV({ disableIndex: true });
+  try {
+    await container.db.open(dbPath, true);
+    return true;
+  } catch (e) {
+    console.error(`Could not open database: ${e.message}`);
+    return false;
+  }
+}

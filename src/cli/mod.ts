@@ -1,7 +1,7 @@
 import { main, registerCommand } from "./loop.ts";
 
 import { help } from "./commands/help.ts";
-import { open } from "./commands/open.ts";
+import { open, openNoIndex } from "./commands/open.ts";
 import { get } from "./commands/get.ts";
 import {
   setBoolean,
@@ -23,6 +23,7 @@ console.log(`@cross/kv ${Colors.dim(`v${packageJson.version}`)}`);
 
 registerCommand("help", help);
 registerCommand("open", open);
+registerCommand("open:noindex", openNoIndex);
 registerCommand("get", get);
 registerCommand("list", list);
 registerCommand("keys", listKeys);
@@ -32,7 +33,7 @@ registerCommand("set:json", setJson);
 registerCommand("set:string", setString);
 registerCommand("set:date", setDate);
 registerCommand("set:boolean", setBoolean);
-registerCommand("del", del);
+registerCommand("delete", del);
 registerCommand("sysinfo", sysinfo);
 registerCommand("count", count);
 

@@ -91,6 +91,19 @@ export interface KVOptions {
    * @defaultValue `10` (10 MB)
    */
   ledgerCacheSize?: number;
+
+  /**
+   * Disables the in-memory index, leading to faster loading,
+   * but preventing efficient querying and iteration using `get`, `iterate`, `scan`, and `list`.
+   *
+   * When `disableIndex` is true:
+   * - Only the `set`, `delete`, and `scan` operations are available.
+   * - Use cases are limited to scenarios where only appending to the ledger is required.
+   * - Memory usage is minimized as the in-memory index is not maintained.
+   *
+   * @defaultValue `false`
+   */
+  disableIndex?: boolean;
 }
 
 /**
@@ -113,6 +126,7 @@ export class KV extends EventEmitter {
   public autoSync: boolean = true;
   /** Public only for testing purposes */
   public syncIntervalMs: number = SYNC_INTERVAL_MS;
+  private disableIndex = false;
 
   // States
   private blockSync: boolean = false; // Syncing can be blocked during vacuum
@@ -160,6 +174,14 @@ export class KV extends EventEmitter {
       );
     }
     this.ledgerCacheSize = options.ledgerCacheSize ?? this.ledgerCacheSize;
+    // - disableIndex
+    if (
+      options.disableIndex !== undefined &&
+      typeof options.disableIndex !== "boolean"
+    ) {
+      throw new TypeError("Invalid option: disableIndex must be a boolean");
+    }
+    this.disableIndex = options.disableIndex ?? false;
 
     if (this.autoSync) {
       this.watchdogPromise = this.watchdog();
@@ -280,15 +302,14 @@ export class KV extends EventEmitter {
     try {
       if (doLock) await this.ledger?.lock();
 
-      const newTransactions = await this.ledger?.sync();
+      const newTransactions = await this.ledger?.sync(this.disableIndex);
 
       if (newTransactions === null) { // Ledger invalidated
         result = "ledgerInvalidated";
         await this.open(this.ledgerPath!, false); // Reopen ledger
       } else {
         result = newTransactions?.length ? "success" : "ready"; // Success if new transactions exist
-
-        if (newTransactions) {
+        if (newTransactions && !this.disableIndex) {
           for (const entry of newTransactions) {
             try {
               this.applyTransactionToIndex(entry.transaction, entry.offset); // Refactored for clarity
@@ -343,8 +364,8 @@ export class KV extends EventEmitter {
    * @throws {Error} If the database is not open or if the transaction operation is unsupported.
    */
   private applyTransactionToIndex(transaction: KVTransaction, offset: number) {
-    // Throw if database isn't open
     this.ensureOpen();
+    this.ensureIndex();
 
     // Check for matches in watch handlers
     for (const handler of this.watchHandlers) {
@@ -367,6 +388,17 @@ export class KV extends EventEmitter {
   }
 
   /**
+   * @throws {Error} If the index is disabled.
+   */
+  private ensureIndex(): void {
+    if (this.disableIndex) {
+      throw new Error(
+        "Operation not available due to `disableIndex` option being set.",
+      );
+    }
+  }
+
+  /**
    * Performs a vacuum operation to reclaim space in the underlying ledger.
    *
    * This operation is essential for maintaining performance as the database grows over time.
@@ -381,6 +413,7 @@ export class KV extends EventEmitter {
   public async vacuum(): Promise<void> {
     // Throw if database isn't open
     this.ensureOpen();
+    this.ensureIndex();
 
     this.blockSync = true;
     await this.ledger?.vacuum();
@@ -434,6 +467,7 @@ export class KV extends EventEmitter {
   ): Promise<KVTransactionResult<T> | null> {
     // Throw if database isn't open
     this.ensureOpen();
+    this.ensureIndex();
     for await (const entry of this.iterate<T>(key, 1)) {
       return entry;
     }
@@ -468,7 +502,7 @@ export class KV extends EventEmitter {
   ): AsyncGenerator<KVTransactionResult<T>> {
     // Throw if database isn't open
     this.ensureOpen();
-
+    this.ensureIndex();
     const validatedKey = new KVKeyInstance(key, true);
     const offsets = this.index!.get(validatedKey, limit)!;
 
@@ -501,6 +535,7 @@ export class KV extends EventEmitter {
   ): Promise<KVTransactionResult<T>[]> {
     // Throw if database isn't open
     this.ensureOpen();
+    this.ensureIndex();
 
     const entries: KVTransactionResult<T>[] = [];
     for await (const entry of this.iterate<T>(key)) {
@@ -524,6 +559,7 @@ export class KV extends EventEmitter {
   public count(key: KVQuery): number {
     // Throw if database isn't open
     this.ensureOpen();
+    this.ensureIndex();
 
     const validatedKey = new KVKeyInstance(key, true);
     const offsets = this.index.get(validatedKey);
@@ -546,10 +582,8 @@ export class KV extends EventEmitter {
 
     // Ensure the key is ok
     const validatedKey = new KVKeyInstance(key);
-
     const transaction = new KVTransaction();
 
-    performance.mark("b");
     await transaction.create(
       validatedKey,
       KVOperation.SET,
@@ -661,7 +695,7 @@ export class KV extends EventEmitter {
       ) {
         try {
           // Add to ledger cache
-          this.ledger!.cacheTransactionData(
+          this.ledger!.cache.cacheTransactionData(
             baseOffset + relativeOffset,
             {
               offset: baseOffset + relativeOffset,
@@ -672,10 +706,12 @@ export class KV extends EventEmitter {
           );
 
           // Add to index
-          this.applyTransactionToIndex(
-            transaction,
-            baseOffset + relativeOffset,
-          );
+          if (!this.disableIndex) {
+            this.applyTransactionToIndex(
+              transaction,
+              baseOffset + relativeOffset,
+            );
+          }
         } catch (error) {
           errors.push(error as Error);
         }
@@ -713,6 +749,7 @@ export class KV extends EventEmitter {
   public listKeys(key: KVKey | KVQuery | null): string[] {
     // Throw if database isn't open
     this.ensureOpen();
+    this.ensureIndex();
 
     return this.index.getChildKeys(
       key === null ? null : new KVKeyInstance(key, true),
@@ -730,6 +767,7 @@ export class KV extends EventEmitter {
     callback: (transaction: KVTransactionResult<T>) => void,
     recursive: boolean = false,
   ) {
+    this.ensureIndex();
     this.watchHandlers.push({ query, callback, recursive });
   }
 
@@ -747,6 +785,7 @@ export class KV extends EventEmitter {
     query: KVQuery,
     callback: (transaction: KVTransactionResult<T>) => void,
   ): boolean {
+    this.ensureIndex();
     const newWatchHandlers = this.watchHandlers.filter(
       (handler) => handler.query !== query || handler.callback !== callback,
     );

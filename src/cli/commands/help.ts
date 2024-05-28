@@ -10,6 +10,9 @@ const helpMessage = `
   Colors.yellow("open")
 } <database_path>      Opens or creates the specified database.
   ${
+  Colors.yellow("open:noindex")
+} <database_path>      Opens or creates the specified database for set/del only.
+  ${
   Colors.yellow("get")
 } <key>                 Retrieves the value associated with the key.
   ${
@@ -29,7 +32,7 @@ const helpMessage = `
 } <key> <value>    Sets a JSON value for the given key.
   ${
   Colors.yellow("list")
-} [query]              Lists key-value pairs matching the optional query.
+} query              Lists key-value pairs recursively matching the query.
   ${
   Colors.yellow("keys")
 } [query]              Lists keys matching the optional query.

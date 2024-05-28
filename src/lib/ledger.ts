@@ -23,6 +23,7 @@ import { KVOperation, KVTransaction } from "./transaction.ts";
 import { rename, unlink } from "@cross/fs";
 import type { FileHandle } from "node:fs/promises";
 import type { KVQuery } from "./key.ts";
+import { KVLedgerCache } from "./cache.ts";
 
 /**
  * This file handles the ledger file, which is where all persisted data of an cross/kv instance is stored.
@@ -47,7 +48,7 @@ interface KVLedgerHeader {
   currentOffset: number;
 }
 
-interface KVLedgerResult {
+export interface KVLedgerResult {
   offset: number;
   length: number;
   transaction: KVTransaction;
@@ -60,9 +61,7 @@ export class KVLedger {
   private dataPath: string;
 
   // Cache
-  private cache: Map<number, KVLedgerResult> = new Map();
-  private cacheSizeBytes = 0;
-  private maxCacheSizeBytes: number;
+  public cache: KVLedgerCache;
 
   public header: KVLedgerHeader = {
     fileId: LEDGER_FILE_ID,
@@ -73,7 +72,7 @@ export class KVLedger {
 
   constructor(filePath: string, maxCacheSizeMBytes: number) {
     this.dataPath = toAbsolutePath(filePath);
-    this.maxCacheSizeBytes = maxCacheSizeMBytes * 1024 * 1024;
+    this.cache = new KVLedgerCache(maxCacheSizeMBytes * 1024 * 1024);
   }
 
   /**
@@ -106,7 +105,9 @@ export class KVLedger {
    *
    * @returns A Promise resolving to an array of the newly retrieved KVTransaction objects, or null if the ledger is invalidated.
    */
-  public async sync(): Promise<KVLedgerResult[] | null> {
+  public async sync(
+    disableIndex: boolean = false,
+  ): Promise<KVLedgerResult[] | null> {
     this.ensureOpen();
 
     const newTransactions = [] as KVLedgerResult[];
@@ -126,51 +127,33 @@ export class KVLedger {
         return null;
       }
 
-      // If there is new transactions
-      reusableFd = await rawOpen(this.dataPath, false);
-      let failures = 0;
-      while (currentOffset < this.header.currentOffset) {
-        if (failures > LEDGER_MAX_READ_FAILURES) {
-          // Recover
-          currentOffset++;
-        }
-        try {
-          const result = await this.rawGetTransaction(
-            currentOffset,
-            false,
-            reusableFd,
-          );
-
-          newTransactions.push(result); // Add the    transaction
-          currentOffset += result.length; // Advance the offset
-          failures = 0;
-        } catch (_e) {
-          failures++;
+      // Return new transactions for indexing
+      if (!disableIndex) {
+        reusableFd = await rawOpen(this.dataPath, false);
+        let failures = 0;
+        while (currentOffset < this.header.currentOffset) {
+          if (failures > LEDGER_MAX_READ_FAILURES) {
+            // Recover
+            currentOffset++;
+          }
+          try {
+            const result = await this.rawGetTransaction(
+              currentOffset,
+              false,
+              reusableFd,
+            );
+            newTransactions.push(result); // Add the    transaction
+            currentOffset += result.length; // Advance the offset
+            failures = 0;
+          } catch (_e) {
+            failures++;
+          }
         }
       }
-      // Update the cached header's currentOffset
-      this.header.currentOffset = currentOffset;
     } finally {
       if (reusableFd) reusableFd.close();
     }
     return newTransactions;
-  }
-
-  public cacheTransactionData(
-    offset: number,
-    transaction: KVLedgerResult,
-  ): void {
-    if (!this.cache.has(offset)) {
-      this.cache.set(offset, transaction);
-      this.cacheSizeBytes += transaction.length;
-      // Evict oldest entries if cache exceeds maximum size
-      while (this.cacheSizeBytes > this.maxCacheSizeBytes) {
-        const oldestOffset = this.cache.keys().next().value;
-        const oldestData = this.cache.get(oldestOffset)!;
-        this.cache.delete(oldestOffset);
-        this.cacheSizeBytes -= oldestData.length;
-      }
-    }
   }
 
   /**
@@ -241,7 +224,17 @@ export class KVLedger {
           reusableFd,
         );
         if (result.transaction.key?.matchesQuery(query)) {
-          yield result; // Yield the matching transaction
+          // Check for completeness
+          if (result.complete) {
+            yield result;
+          } else {
+            const completeResult = this.rawGetTransaction(
+              result.offset,
+              true,
+              reusableFd,
+            );
+            yield completeResult;
+          }
         }
         currentOffset += result.length; // Advance the offset
       }
@@ -319,7 +312,7 @@ export class KVLedger {
     this.ensureOpen();
 
     // Check cache first
-    const cachedResult = this.cache.get(baseOffset);
+    const cachedResult = this.cache.getTransactionData(baseOffset);
     if (cachedResult && (!readData || cachedResult.complete)) {
       return cachedResult;
     }
@@ -386,7 +379,7 @@ export class KVLedger {
       };
 
       // Cache transaction
-      this.cacheTransactionData(baseOffset, result);
+      this.cache.cacheTransactionData(baseOffset, result);
 
       return result;
     } finally {
@@ -439,7 +432,7 @@ export class KVLedger {
       const tempFilePath = this.dataPath + "-tmp";
       const tempLedger = new KVLedger(
         tempFilePath,
-        this.maxCacheSizeBytes / 1024 / 1024,
+        this.cache.maxCacheSizeBytes,
       );
       await tempLedger.open(true);
 

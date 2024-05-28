@@ -11,7 +11,7 @@ export const SUPPORTED_LEDGER_VERSIONS: string[] = [
 export const LEDGER_MAX_READ_FAILURES = 10;
 export const LEDGER_PREFETCH_BYTES = 256;
 export const SYNC_INTERVAL_MS = 2_500; // Overridable with instance configuration
-export const LEDGER_CACHE_MB = 50; // Allow 50 MBytes of the ledger to exist in RAM
+export const LEDGER_CACHE_MB = 100; // Allow 100 MBytes of the ledger to exist in RAM
 
 // Extremely constant
 export const LEDGER_BASE_OFFSET = 256; // DO NOT CHANGE!
