@@ -10,7 +10,7 @@ import {
 test("KVLedger: readHeader - valid header", async () => {
   // Arrange: Create a temporary ledger file with a valid header
   const tempFilePrefix = await tempfile();
-  const ledger = new KVLedger(tempFilePrefix);
+  const ledger = new KVLedger(tempFilePrefix, 100);
   await ledger.open();
 
   // Act: Read the header
@@ -30,7 +30,7 @@ test("KVLedger: readHeader - valid header", async () => {
 test("KVLedger: readHeader - invalid file ID", async () => {
   // Arrange: Create a temporary ledger file with an invalid header
   const tempFilePrefix = await tempfile();
-  const ledger = new KVLedger(tempFilePrefix);
+  const ledger = new KVLedger(tempFilePrefix, 0);
   await ledger.open();
 
   ledger.header.fileId = "XXXX";
@@ -46,7 +46,7 @@ test("KVLedger: readHeader - invalid file ID", async () => {
 test("KVLedger: readHeader - invalid version", async () => {
   // Arrange: Create a temporary ledger file with an invalid header
   const tempFilePrefix = await tempfile();
-  const ledger = new KVLedger(tempFilePrefix);
+  const ledger = new KVLedger(tempFilePrefix, 0);
   await ledger.open();
 
   ledger.header.ledgerVersion = "XXXX";
@@ -59,7 +59,7 @@ test("KVLedger: readHeader - invalid version", async () => {
 test("KVLedger: writeHeader", async () => {
   // Arrange: Create a ledger and modify its header
   const tempFilePrefix = await tempfile();
-  const ledger = new KVLedger(tempFilePrefix);
+  const ledger = new KVLedger(tempFilePrefix, 100);
   await ledger.open();
   ledger.header.created = 1234567890;
   ledger.header.currentOffset = 2048;

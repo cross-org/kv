@@ -4,10 +4,9 @@ import {
   ensureOpen,
   hasParameter,
   type KVDBContainer,
-  toHexString,
 } from "../common.ts";
 import { type KVKey, KVKeyInstance } from "../../lib/key.ts";
-import { KVOperation } from "../../lib/transaction.ts";
+import { printTransaction } from "../common.ts";
 
 export async function get(
   container: KVDBContainer,
@@ -16,39 +15,30 @@ export async function get(
   if (!ensureOpen(container)) return false;
   if (!ensureMaxParameters(params, 1)) return false;
 
-  let key;
+  let key: KVKey;
   if (hasParameter(params, 0)) {
-    key = params[0];
+    // Validate query
+    try {
+      const parsedKey = KVKeyInstance.parse(params[0], false);
+      key = new KVKeyInstance(parsedKey).get() as KVKey;
+    } catch (e) {
+      console.error(`Could not parse key: ${e.message}`);
+      return false;
+    }
   } else {
-    console.error(Colors.red("No key specified."));
+    console.error("No key supplied.");
     return false;
   }
 
-  const keyParsed = KVKeyInstance.parse(key, false) as KVKey;
-  const value = await container.db?.get(keyParsed);
+  const transaction = await container.db?.get(key);
 
-  if (value) {
-    const operationName = KVOperation[value.operation as KVOperation] ??
-      "Unknown";
+  if (transaction) {
+    printTransaction(transaction);
     console.log("");
-    console.log(Colors.bold("Key:\t\t"), JSON.stringify(keyParsed));
-    console.log(
-      Colors.bold("Operation:\t"),
-      `${operationName} (${Colors.yellow(value.operation.toString())})`,
-    );
-    console.log(
-      Colors.bold("Timestamp:\t"),
-      Colors.magenta(new Date(value.timestamp).toISOString()),
-    );
-    console.log(
-      Colors.bold("Hash:\t\t"),
-      value.hash ? toHexString(value.hash) : null,
-    );
-    console.log("");
-    console.dir(value.data, { depth: 3, colors: true });
     return true;
   } else {
     console.log(Colors.red("Key not found."));
+    console.log("");
     return false;
   }
 }

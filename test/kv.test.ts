@@ -3,7 +3,10 @@ import { test } from "@cross/test";
 import { KV, type KVOptions } from "../src/lib/kv.ts";
 import { tempfile } from "@cross/fs";
 import { SYNC_INTERVAL_MS } from "../src/lib/constants.ts";
-import type { KVTransactionResult } from "../src/lib/transaction.ts";
+import {
+  KVOperation,
+  type KVTransactionResult,
+} from "../src/lib/transaction.ts";
 import type { KVQuery } from "../mod.ts";
 
 test("KV: set, get and delete (numbers and strings)", async () => {
@@ -537,6 +540,59 @@ test("KV: watch functionality - no match", async () => {
   await kvStore.sync(true);
 
   assertEquals(callbackCalled, false, "Callback should not have been called");
+
+  await kvStore.close();
+});
+
+test("KV: scan for non-existent key", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV({ autoSync: false });
+  await kvStore.open(tempFilePrefix);
+
+  const query = ["nonExistentKey"];
+
+  const scanGenerator = kvStore.scan(query);
+  const result = await scanGenerator.next();
+
+  assertEquals(
+    result.done,
+    true,
+    "Generator should have no values for non-existent key",
+  );
+  assertEquals(result.value, undefined, "Value should be undefined");
+
+  await kvStore.close();
+});
+
+test("KV: scan for existing key with multiple transactions", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV({ autoSync: false });
+  await kvStore.open(tempFilePrefix);
+
+  const key = ["existingKey"];
+
+  // Create multiple transactions for the same key
+  const expectedTransactions: KVTransactionResult<number>[] = [];
+  for (let i = 0; i < 3; i++) {
+    const value = i;
+    await kvStore.set(key, value);
+    expectedTransactions.push(
+      await kvStore.get(key) as KVTransactionResult<number>,
+    );
+  }
+
+  // Perform the scan
+  const actualTransactions: KVTransactionResult<number>[] = [];
+  for await (const transaction of kvStore.scan(key)) {
+    actualTransactions.push(transaction as KVTransactionResult<number>);
+  }
+
+  // Assertions
+  assertEquals(actualTransactions.length, expectedTransactions.length);
+  for (let i = 0; i < actualTransactions.length; i++) {
+    assertEquals(actualTransactions[i].operation, KVOperation.SET);
+    assertEquals(actualTransactions[i].key, expectedTransactions[i].key);
+  }
 
   await kvStore.close();
 });

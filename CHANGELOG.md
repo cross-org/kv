@@ -1,3 +1,15 @@
+## 0.15.0
+
+- Added in-memory cache for ledger
+- Added option `disableIndex` for faster startup in scenarios where you don't
+  have to query the index.
+- Added option `ledgerCacheSize` to control how much of the ledger to cache in
+  memory, for faster retrieval.
+- Refactor of cli tool
+- Added command `open:noindex` to cli-tool.
+- Added the `.scan()` method to extract full transaction history for a certain
+  key.
+
 ## 0.14.0
 
 - Cli-tool `ckv` now included in `@cross/kv` through export `@cross/kv/cli`

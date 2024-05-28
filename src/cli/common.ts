@@ -1,5 +1,6 @@
 import { Colors } from "@cross/utils";
-import type { KV } from "../../mod.ts";
+import type { KV, KVTransactionResult } from "../../mod.ts";
+import { KVOperation } from "../lib/transaction.ts";
 
 export interface KVDBContainer {
   db?: KV;
@@ -40,4 +41,27 @@ export function toHexString(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
     "",
   );
+}
+export function printTransaction(
+  transaction: KVTransactionResult<unknown>,
+): void {
+  const operationName = KVOperation[transaction.operation as KVOperation] ??
+    "Unknown";
+
+  console.log("");
+  console.log(Colors.bold("Key:\t\t"), JSON.stringify(transaction.key));
+  console.log(
+    Colors.bold("Operation:\t"),
+    `${operationName} (${Colors.yellow(transaction.operation.toString())})`,
+  );
+  console.log(
+    Colors.bold("Timestamp:\t"),
+    Colors.magenta(new Date(transaction.timestamp).toISOString()),
+  );
+  console.log(
+    Colors.bold("Hash:\t\t"),
+    transaction.hash ? toHexString(transaction.hash) : null,
+  );
+  console.log("");
+  console.dir(transaction.data, { depth: 3, colors: true });
 }

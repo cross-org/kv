@@ -1,6 +1,6 @@
 # @cross/kv
 
-A lightweight, fast, powerful and cross-platform key-value database for Node.js,
+A fast, lightweight, powerful and cross-platform key-value database for Node.js,
 Deno, and Bun.
 
 [![JSR](https://jsr.io/badges/@cross/kv)](https://jsr.io/@cross/kv)
@@ -106,8 +106,7 @@ deno install -frA --name ckv jsr:@cross/kv/cli
 
 ### Methods
 
-- `KV(options)` - Main class. Options such as `autoSync` and `syncIntervalMs`
-  are optional.
+- `KV(options)` - Main class. Options are optional.
   - `async open(filepath, createIfMissing)` - Opens the KV store.
     `createIfMissing` defaults to true.
   - `async set<T>(key, value)` - Stores a value.
@@ -185,6 +184,43 @@ objects like `{ from: 5, to: 20 }` or `{ from: "a", to: "l" }`. An empty range
 ["products", "book", {}, "author"]
 ```
 
+### Options
+
+You can customize the behavior of the KV store using the following options when
+creating a new KV instance:
+
+```typescript
+const db = new KV({
+  autoSync: true, // Enable/disable automatic synchronization (default: true)
+  syncIntervalMs: 1000, // Synchronization interval in milliseconds (default: 1000)
+  ledgerCacheSize: 100, // Ledger cache size in megabytes (default: 100)
+  disableIndex: false, // Disable in-memory index for faster loading but limited functionality (default: false)
+});
+```
+
+Explanations:
+
+- **autoSync** (boolean):
+  - `true` (default): The in-memory index is automatically synchronized with the
+    on-disk ledger in the background. This is recommended for multi-process
+    scenarios.
+  - `false`: Automatic synchronization is disabled. You'll need to call
+    db.sync() manually to keep the index up-to-date. This might be suitable for
+    single-process scenarios where you prioritize performance.
+- **syncIntervalMs** (number): Specifies the interval (in milliseconds) between
+  automatic synchronization operations if autoSync is enabled. A shorter
+  interval provides more up-to-date data but may introduce more overhead.
+- **ledgerCacheSize** (number): Sets the maximum amount of ledger data (in
+  megabytes) to cache in memory. A larger cache can improve read performance but
+  consumes more memory.
+- **disableIndex** (boolean):
+  - `false` (default): The in-memory index is enabled, allowing for efficient
+    data retrieval and complex queries.
+  - `true`: The in-memory index is disabled, resulting in faster loading times
+    but preventing the use of get, iterate, scan, and list. This is suitable
+    only when you need to append data to the ledger and don't require efficient
+    querying.
+
 ## Concurrency
 
 `cross/kv` has a built-in mechanism for synchronizing the in-memory index with
@@ -236,6 +272,7 @@ kvStore.on("sync", (eventData) => {
       // Handle unexpected eventData.result values if needed
   }
 });
+```
 
 ## Contributing
 
@@ -248,4 +285,3 @@ package in most distributions.
 ## **License**
 
 MIT License
-```

@@ -3,11 +3,10 @@ import {
   ensureOpen,
   hasParameter,
   type KVDBContainer,
-  userInput,
 } from "../common.ts";
-import { KVKeyInstance, type KVQuery } from "../../lib/key.ts";
-import { KVOperation } from "../../lib/transaction.ts";
 import { Colors } from "@cross/utils";
+import { printTransaction } from "../common.ts";
+import { type KVKey, KVKeyInstance } from "../../lib/key.ts";
 
 export async function scan(
   container: KVDBContainer,
@@ -16,30 +15,21 @@ export async function scan(
   if (!ensureOpen(container)) return false;
   if (!ensureMaxParameters(params, 1)) return false;
 
-  let query: KVQuery;
+  let keyParsed;
   if (hasParameter(params, 0)) {
-    query = KVKeyInstance.parse(params[0], true); // Query parsing
+    keyParsed = KVKeyInstance.parse(params[0], false) as KVKey;
   } else {
-    const queryInput = userInput("Enter query (dot separated): ");
-    if (!queryInput) return false; // Exit if no query provided
-    query = KVKeyInstance.parse(queryInput, true);
+    console.error(Colors.red("No key specified."));
+    return false;
   }
-
-  console.log("");
 
   // Iterate over matching entries
   let results = 0;
-  for await (const value of container.db!.scan(query)) {
-    const operationName = KVOperation[value.operation as KVOperation] ??
-      "Unknown";
-    console.log(
-      Colors.magenta(new Date(value.timestamp).toISOString()),
-      JSON.stringify(value.key),
-      `${operationName} (${Colors.yellow(value.operation.toString())})`,
-      JSON.stringify(value.data).slice(0, 30),
-    );
+  for await (const transaction of container.db!.scan(keyParsed)) {
+    printTransaction(transaction);
     results++;
   }
+
   if (results === 0) {
     console.log(Colors.red("Key not found."));
     return false;
