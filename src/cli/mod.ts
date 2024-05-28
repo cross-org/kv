@@ -16,6 +16,7 @@ import { listKeys } from "./commands/keys.ts";
 import { scan } from "./commands/scan.ts";
 import { sysinfo } from "./commands/sysinfo.ts";
 import { count } from "./commands/count.ts";
+import { vacuum } from "./commands/vacuum.ts";
 
 import packageJson from "../../deno.json" with { type: "json" };
 import { Colors } from "@cross/utils";
@@ -36,5 +37,6 @@ registerCommand("set:boolean", setBoolean);
 registerCommand("delete", del);
 registerCommand("sysinfo", sysinfo);
 registerCommand("count", count);
+registerCommand("vacuum", vacuum);
 
 main();

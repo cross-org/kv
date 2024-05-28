@@ -1,4 +1,4 @@
-import type { KVKeyInstance, KVQueryRange } from "./key.ts";
+import type { KVKey, KVKeyInstance, KVQueryRange } from "./key.ts";
 
 /**
  * Represents content of a node within the KVIndex tree.
@@ -77,8 +77,41 @@ export class KVIndex {
     const oldReference = current.reference;
     delete current.reference;
 
-    // No need to cleanup as leftover nodes will be lost at next rebuild
+    // Recursive cleanup
+    this.cleanup(this.index, key.get() as KVKey);
+
     return oldReference;
+  }
+
+  /**
+   * Recursively cleans up empty nodes in the index tree.
+   */
+  private cleanup(
+    node: KVIndexContent,
+    keyParts: (string | number)[],
+  ): boolean {
+    if (keyParts.length === 0) {
+      // Reached the target node, remove reference if present
+      delete node.reference;
+
+      // If no children, delete the node itself
+      return node.children.size === 0;
+    }
+
+    // Create a copy of keyParts to avoid modifying the original
+    const remainingKeyParts = [...keyParts];
+    const keyPart = remainingKeyParts.shift() as (string | number);
+
+    const childNode = node.children.get(keyPart);
+    if (!childNode) return false; // Key path not found
+
+    const shouldDeleteChild = this.cleanup(childNode, remainingKeyParts); // Pass the copy
+    if (shouldDeleteChild) {
+      node.children.delete(keyPart);
+    }
+
+    // If no children or reference, delete the node itself
+    return node.children.size === 0 && node.reference === undefined;
   }
 
   /**

@@ -596,3 +596,27 @@ test("KV: scan for existing key with multiple transactions", async () => {
 
   await kvStore.close();
 });
+
+test("KV: list keys after deletion", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV({ autoSync: false }); // Manual sync for better control
+  await kvStore.open(tempFilePrefix);
+
+  await kvStore.set(["user", "profile", "name"], "Alice");
+  await kvStore.set(["user", "info"], "Yes");
+  await kvStore.set(["system", "version"], 1.0);
+
+  // Before Deletion
+  assertEquals(kvStore.listKeys(null), ["user", "system"]);
+
+  await kvStore.delete(["user", "profile", "name"]); // Delete a key
+
+  assertEquals(kvStore.listKeys(null), ["user", "system"]); // Now 'profile' should be gone
+  assertEquals(kvStore.listKeys(["user"]), ["info"]); // Info should be left
+
+  await kvStore.delete(["user", "info"]); // Delete a key
+
+  assertEquals(kvStore.listKeys(null), ["system"]); // Now 'user' should be gone
+
+  await kvStore.close();
+});

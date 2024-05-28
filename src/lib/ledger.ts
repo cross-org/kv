@@ -218,6 +218,7 @@ export class KVLedger {
     try {
       reusableFd = await rawOpen(this.dataPath, false); // Keep file open during scan
       while (currentOffset < this.header.currentOffset) {
+        // Allow getting partial results (2nd parameter false) to re-use ledger cache to the maximum
         const result = await this.rawGetTransaction(
           currentOffset,
           false,
@@ -228,7 +229,7 @@ export class KVLedger {
           if (result.complete) {
             yield result;
           } else {
-            const completeResult = this.rawGetTransaction(
+            const completeResult = await this.rawGetTransaction(
               result.offset,
               true,
               reusableFd,

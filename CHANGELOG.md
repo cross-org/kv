@@ -1,3 +1,9 @@
+## 0.15.1
+
+- Fixed problem where keys lingered when running .listKeys() after a deletion.
+- Adds `vacuum` cli command
+- Fixes missing await in `.scan()`
+
 ## 0.15.0
 
 - Added in-memory cache for ledger
