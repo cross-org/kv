@@ -388,6 +388,8 @@ export class KV extends EventEmitter {
   }
 
   /**
+   * Function that throws of the index is disabled.
+   *
    * @throws {Error} If the index is disabled.
    */
   private ensureIndex(): void {

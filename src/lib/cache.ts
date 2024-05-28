@@ -1,4 +1,4 @@
-import { KVLedgerResult } from "./ledger.ts";
+import type { KVLedgerResult } from "./ledger.ts";
 
 /**
  * An in-memory cache for `KVLedgerResult` objects, optimized for append-only ledgers.

@@ -5,7 +5,7 @@ import {
   hasParameter,
   type KVDBContainer,
 } from "../common.ts";
-import { type KVKey, KVKeyInstance, type KVQuery } from "../../lib/key.ts";
+import { KVKeyInstance, type KVQuery } from "../../lib/key.ts";
 
 // deno-lint-ignore require-await
 export async function listKeys(
