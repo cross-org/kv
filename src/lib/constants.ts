@@ -1,17 +1,19 @@
 // Configurable
 export const LOCK_DEFAULT_MAX_RETRIES = 32;
 export const LOCK_DEFAULT_INITIAL_RETRY_INTERVAL_MS = 30; // Increased with itself on each retry, so the actual retry interval is 20, 40, 60 etc. 32 and 20 become about 10 seconds total.
-export const LOCK_STALE_TIMEOUT_MS = 60_000;
-export const LEDGER_CURRENT_VERSION: string = "B013";
+export const LOCK_STALE_TIMEOUT_MS = 6 * 60 * 60 * 1000; // Automatically unlock a ledger that has been locked for more than 2*60*60*1000 = 2 hours.
+export const LEDGER_CURRENT_VERSION: string = "B015";
 export const SUPPORTED_LEDGER_VERSIONS: string[] = [
   LEDGER_CURRENT_VERSION,
   "B011",
   "B012",
+  "B013",
 ];
 export const LEDGER_MAX_READ_FAILURES = 10;
 export const LEDGER_PREFETCH_BYTES = 256;
 export const SYNC_INTERVAL_MS = 2_500; // Overridable with instance configuration
-export const LEDGER_CACHE_MB = 100; // Allow 100 MBytes of the ledger to exist in RAM
+export const LEDGER_CACHE_MB = 100; // Allow 100 MBytes of the ledger to exist in RAM. Not an exact science due to LEDGER_CACHE_MEMORY_FACTOR.
+export const LEDGER_CACHE_MEMORY_FACTOR = 3; // Assume that ledger entries take about n times as much space when unwrapped in RAM. Used for ledger cache memory limit, does not need to be exakt.
 
 // Extremely constant
 export const LEDGER_BASE_OFFSET = 256; // DO NOT CHANGE!

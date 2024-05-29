@@ -49,6 +49,8 @@ export function printTransaction(
     "Unknown";
 
   console.log("");
+  console.log(Colors.dim("---"));
+  console.log("");
   console.log(Colors.bold("Key:\t\t"), JSON.stringify(transaction.key));
   console.log(
     Colors.bold("Operation:\t"),

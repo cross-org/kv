@@ -1,3 +1,4 @@
+import { LEDGER_CACHE_MEMORY_FACTOR } from "./constants.ts";
 import type { KVLedgerResult } from "./ledger.ts";
 
 /**
@@ -41,7 +42,7 @@ export class KVLedgerCache {
   cacheTransactionData(offset: number, transaction: KVLedgerResult): void {
     if (!this.cache[offset]) this.cacheEntries.push(offset);
     this.cache[offset] = transaction;
-    this.cacheSizeBytes += transaction.length;
+    this.cacheSizeBytes += transaction.length * LEDGER_CACHE_MEMORY_FACTOR;
 
     this.evictOldestEntries();
   }
@@ -74,7 +75,7 @@ export class KVLedgerCache {
       if (oldestOffset) {
         const oldestData = this.cache[oldestOffset];
         delete this.cache[oldestOffset];
-        this.cacheSizeBytes -= oldestData.length;
+        this.cacheSizeBytes -= oldestData.length * LEDGER_CACHE_MEMORY_FACTOR;
       }
     }
   }

@@ -324,6 +324,20 @@ export class KVKeyInstance {
       return false;
     }
 
+    // Shortcut for []
+    if (thisKey.length === 0 && recursive) {
+      return true;
+    }
+
+    // Shortcut for [{}]
+    if (
+      thisKey.length === 1 && typeof thisKey[0] === "object" &&
+      (thisKey[0] as KVQueryRange).from === undefined &&
+      (thisKey[0] as KVQueryRange).to === undefined
+    ) {
+      return true;
+    }
+
     for (let i = 0; i < query.length; i++) {
       const queryElement = query[i];
       const keyElement = thisKey[i];

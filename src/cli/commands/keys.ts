@@ -29,7 +29,13 @@ export async function listKeys(
     query = null;
   }
 
-  const childKeys = container.db?.listKeys(query);
+  let childKeys;
+  try {
+    childKeys = container.db?.listKeys(query);
+  } catch (e) {
+    console.error(`Error while enumerating keys: ${e.message}`);
+    return false;
+  }
 
   console.log("");
 

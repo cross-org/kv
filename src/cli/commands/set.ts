@@ -20,7 +20,13 @@ async function handleSetCommand(
     console.error(Colors.red("Key not specified."));
     return false;
   }
-  const key = KVKeyInstance.parse(params[0], false) as KVKey;
+  let key: KVKey;
+  try {
+    key = KVKeyInstance.parse(params[0], false) as KVKey;
+  } catch (e) {
+    console.error(`Could not parse key: ${e.message}`);
+    return false;
+  }
 
   if (!params[1]) {
     console.error(Colors.red(`Data not specified, should be ${dataType}.`));
@@ -34,7 +40,12 @@ async function handleSetCommand(
     console.error(Colors.red(e.message + ".\n"));
     return false;
   }
-  await container.db?.set(key, value);
+  try {
+    await container.db?.set(key, value);
+  } catch (e) {
+    console.error(Colors.red(e.message + ".\n"));
+    return false;
+  }
   return true;
 }
 

@@ -205,14 +205,15 @@ Explanations:
     on-disk ledger in the background. This is recommended for multi-process
     scenarios.
   - `false`: Automatic synchronization is disabled. You'll need to call
-    db.sync() manually to keep the index up-to-date. This might be suitable for
-    single-process scenarios where you prioritize performance.
+    db.sync() manually to keep the index up-to-date with other processes. This
+    might be suitable for single-process scenarios, or where you fine grained
+    control over performance.
 - **syncIntervalMs** (number): Specifies the interval (in milliseconds) between
   automatic synchronization operations if autoSync is enabled. A shorter
   interval provides more up-to-date data but may introduce more overhead.
 - **ledgerCacheSize** (number): Sets the maximum amount of ledger data (in
   megabytes) to cache in memory. A larger cache can improve read performance but
-  consumes more memory.
+  consumes more memory. (Default `100`).
 - **disableIndex** (boolean):
   - `false` (default): The in-memory index is enabled, allowing for efficient
     data retrieval and complex queries.

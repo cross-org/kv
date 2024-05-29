@@ -17,7 +17,12 @@ export async function scan(
 
   let keyParsed;
   if (hasParameter(params, 0)) {
-    keyParsed = KVKeyInstance.parse(params[0], false) as KVKey;
+    try {
+      keyParsed = KVKeyInstance.parse(params[0], false) as KVKey;
+    } catch (e) {
+      console.error(`Could not parse query: ${e.message}`);
+      return false;
+    }
   } else {
     console.error(Colors.red("No key specified."));
     return false;

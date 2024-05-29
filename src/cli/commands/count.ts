@@ -16,7 +16,12 @@ export async function count(
 
   let key;
   if (hasParameter(params, 0)) {
-    key = new KVKeyInstance(KVKeyInstance.parse(params[0], true));
+    try {
+      key = new KVKeyInstance(KVKeyInstance.parse(params[0], true));
+    } catch (e) {
+      console.error(`Could not parse query: ${e.message}`);
+      return false;
+    }
   } else {
     key = new KVKeyInstance([{}], true);
   }
@@ -24,8 +29,13 @@ export async function count(
   console.log("");
 
   // Iterate over matching entries
-  console.log(container.db!.count(key.get()));
-
-  console.log(""); // Extra newline for separation
-  return true;
+  try {
+    console.log(container.db!.count(key.get()));
+    console.log(""); // Extra newline for separation
+    return true;
+  } catch (e) {
+    console.error(`Error while counting transactions: ${e.message}`);
+    console.log(""); // Extra newline for separation
+    return false;
+  }
 }

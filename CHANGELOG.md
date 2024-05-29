@@ -1,3 +1,20 @@
+## 0.15.2
+
+- Fixed a problem where records were overwritten during large atomic transaction
+  writes.
+- Renamed the CLI command `sysinfo` to `stats` and added ledger statistics.
+- Added a constant factor `LEDGER_CACHE_MEMORY_FACTOR` to approximate the actual
+  memory used by the ledger cache, based on raw data size.
+- Added a `recursive` option to `.scan()` to allow recursively counting
+  transactions in the ledger.
+- Improved error handling in cli commands.
+- Increase `LOCK_STALE_TIMEOUT_MS` from 60 seconds to 3 hours, to allow longer
+  running queries.
+- Fixed error where ledger was unlocked instantly after a failed locking
+  operation.
+- Added `unlock`-command to the cli interface, to allow manually unlocking a
+  database from a crashed process.
+
 ## 0.15.1
 
 - Fixed problem where keys lingered when running .listKeys() after a deletion.

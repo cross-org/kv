@@ -222,6 +222,23 @@ export class KV extends EventEmitter {
   }
 
   /**
+   * Forcibly unlocks the underlying ledger file.
+   *
+   * **WARNING:** This method should only be used in exceptional circumstances,
+   * such as recovering from crashes or unexpected shutdowns. It may lead to data
+   * corruption if used incorrectly while other processes are actively using the ledger.
+   *
+   * @throws If ledger isn't open, or on unexpected errors.
+   */
+  public async forceUnlockLedger(): Promise<void> {
+    if (!this.ledger) {
+      throw new Error("No ledger is currently open.");
+    }
+
+    await this.ledger.unlock();
+  }
+
+  /**
    * Starts a background process to periodically synchronize the in-memory index with the on-disk ledger.
    *
    * This function is crucial for maintaining consistency between the index and the ledger when the database is
@@ -298,9 +315,10 @@ export class KV extends EventEmitter {
     // Synchronization Logic (with lock if needed)
     let result: KVSyncResult["result"] = "ready";
     let error: Error | null = null;
-
+    let lockSucceeded = false; // Keeping track as we only want to unlock the database later, if the locking operation succeeded
     try {
       if (doLock) await this.ledger?.lock();
+      lockSucceeded = true;
 
       const newTransactions = await this.ledger?.sync(this.disableIndex);
 
@@ -327,7 +345,7 @@ export class KV extends EventEmitter {
       result = "error";
       error = new Error("Error during ledger sync", { cause: syncError });
     } finally {
-      if (doLock) await this.ledger?.unlock();
+      if (doLock && lockSucceeded) await this.ledger?.unlock();
       // @ts-ignore .emit exists
       this.emit("sync", { result, error });
     }
@@ -339,13 +357,15 @@ export class KV extends EventEmitter {
    * Asynchronously iterates over data entries associated with a given key.
    *
    * @param query - Representation of the key to search for, or a query object for complex filters.
+   * @param recursive - Match all entries matching the given query, and recurse.
    * @returns An async generator yielding `KVTransactionResult` objects for each matching entry.
    */
   public async *scan<T = unknown>(
     query: KVKey | KVQuery,
+    recursive: boolean = false,
   ): AsyncGenerator<KVTransactionResult<T>> {
     this.ensureOpen();
-    for await (const result of this.ledger!.scan(query)) {
+    for await (const result of this.ledger!.scan(query, recursive)) {
       if (result?.transaction) { // Null check to ensure safety
         const processedResult = result.transaction.asResult<T>(); // Apply your processing logic here
         yield processedResult;
@@ -815,5 +835,12 @@ export class KV extends EventEmitter {
 
     // Abort any watchdog timer
     clearTimeout(this.watchdogTimer!);
+  }
+
+  /**
+   * Gets the path to the currently configured ledger, if there is one.
+   */
+  public getLedgerPath(): string | undefined {
+    return this.ledgerPath;
   }
 }

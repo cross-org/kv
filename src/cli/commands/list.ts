@@ -29,11 +29,14 @@ export async function list(
     return false;
   }
 
-  console.log("");
-
   // Iterate over matching entries (max 1000)
-  for await (const entry of container.db!.iterate(query, 1000)) {
-    printTransaction(entry);
+  try {
+    for await (const entry of container.db!.iterate(query, 1000)) {
+      printTransaction(entry);
+    }
+  } catch (e) {
+    console.error(`Error while enumerating matches: ${e.message}`);
+    return false;
   }
 
   console.log(""); // Extra newline for separation

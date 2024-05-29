@@ -11,7 +11,7 @@ const helpMessage = `
 } <database_path>      Opens or creates the specified database.
   ${
   Colors.yellow("open:noindex")
-} <database_path>      Opens or creates the specified database for set/del only.
+} <db_path>    Opens or creates the specified database for set/del only.
   ${
   Colors.yellow("get")
 } <key>                 Retrieves the value associated with the key.
@@ -32,7 +32,7 @@ const helpMessage = `
 } <key> <value>    Sets a JSON value for the given key.
   ${
   Colors.yellow("list")
-} query              Lists key-value pairs recursively matching the query.
+} query                Lists key-value pairs recursively matching the query.
   ${
   Colors.yellow("keys")
 } [query]              Lists keys matching the optional query.
@@ -41,13 +41,13 @@ const helpMessage = `
 } <key>              Deletes the key-value pair with the given key.
   ${
   Colors.yellow("scan")
-} [prefix]             Iterates over key-value pairs with the optional prefix.
+} <key>                Iterates over transactions matching the given key, returning full data.
   ${
   Colors.yellow("count")
 } [query]             Counts key-value pairs recursively matching the optional query.
   ${
-  Colors.yellow("sysinfo")
-}                   Displays system and process memory information.
+  Colors.yellow("stats")
+}                     Displays database and process information.
   ${Colors.yellow("help")}                      Shows this help message.
   ${Colors.yellow("exit")}                      Exits the CLI.
 `;

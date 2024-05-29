@@ -13,9 +13,14 @@ export async function vacuum(
 
   console.log("");
 
-  await container.db?.vacuum();
-
-  console.log("Vacuum done.");
-
-  return true;
+  try {
+    await container.db?.vacuum();
+    console.log("Vacuum done.");
+    console.log("");
+    return true;
+  } catch (e) {
+    console.error(`Vacuum failed: ${e.message}`);
+    console.log("");
+    return false;
+  }
 }

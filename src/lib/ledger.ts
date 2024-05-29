@@ -204,10 +204,12 @@ export class KVLedger {
    * each matching transaction.
    *
    * @param query
+   * @param recursive
    * @returns An async generator yielding `KVLedgerResult` objects for each matching transaction.
    */
   public async *scan(
     query: KVQuery,
+    recursive: boolean,
   ): AsyncIterableIterator<KVLedgerResult> {
     this.ensureOpen();
 
@@ -224,7 +226,7 @@ export class KVLedger {
           false,
           reusableFd,
         );
-        if (result.transaction.key?.matchesQuery(query)) {
+        if (result.transaction.key?.matchesQuery(query, recursive)) {
           // Check for completeness
           if (result.complete) {
             yield result;
@@ -287,16 +289,25 @@ export class KVLedger {
    */
   public async add(transactionsData: Uint8Array[]): Promise<number> {
     this.ensureOpen();
+
+    // Used to return the first offset of the series
     const baseOffset = this.header.currentOffset;
+
+    // Used to track insert position, this.header.currentOffset can
+    // change by sync while inserting, so keep a separate copy.
+    let currentOffset = this.header.currentOffset;
+
     let fd;
     try {
       fd = await rawOpen(this.dataPath, true);
       for (const transactionData of transactionsData) {
         // Append each transaction data
-        await writeAtPosition(fd, transactionData, this.header.currentOffset);
+        await writeAtPosition(fd, transactionData, currentOffset);
+
+        currentOffset += transactionData.length;
 
         // Update the current offset in the header
-        this.header.currentOffset += transactionData.length;
+        this.header.currentOffset = currentOffset;
       }
       await this.writeHeader(); // Update header with the new offset
     } finally {

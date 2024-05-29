@@ -1,10 +1,8 @@
-import { Colors } from "@cross/utils";
 import {
   ensureMaxParameters,
   ensureOpen,
   hasParameter,
   type KVDBContainer,
-  userInput,
 } from "../common.ts";
 import { type KVKey, KVKeyInstance } from "../../lib/key.ts";
 
@@ -15,18 +13,28 @@ export async function del(
   if (!ensureOpen(container)) return false;
   if (!ensureMaxParameters(params, 1)) return false;
 
-  let key;
+  let key: KVKey;
   if (hasParameter(params, 0)) {
-    key = params[0];
-  } else {
-    key = userInput("Enter key to delete (dot separated):") || "";
-    if (!key) {
-      console.error(Colors.red("Key not specified.\n"));
+    // Validate query
+    try {
+      const parsedKey = KVKeyInstance.parse(params[0], false);
+      key = new KVKeyInstance(parsedKey).get() as KVKey;
+    } catch (e) {
+      console.error(`Could not parse key: ${e.message}`);
       return false;
     }
+  } else {
+    console.error("No key supplied.");
+    return false;
   }
 
-  const keySplit = KVKeyInstance.parse(key, false) as KVKey;
-  await container.db?.delete(keySplit);
-  return true;
+  try {
+    await container.db?.delete(key);
+    console.log(""); // Extra newline for separation
+    return true;
+  } catch (e) {
+    console.error(`Error while deleting data: ${e.message}`);
+    console.log(""); // Extra newline for separation
+    return false;
+  }
 }

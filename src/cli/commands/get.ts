@@ -30,15 +30,20 @@ export async function get(
     return false;
   }
 
-  const transaction = await container.db?.get(key);
-
-  if (transaction) {
-    printTransaction(transaction);
-    console.log("");
-    return true;
-  } else {
-    console.log(Colors.red("Key not found."));
-    console.log("");
+  try {
+    const transaction = await container.db?.get(key);
+    if (transaction) {
+      printTransaction(transaction);
+      console.log("");
+      return true;
+    } else {
+      console.log(Colors.red("Key not found."));
+      console.log("");
+      return false;
+    }
+  } catch (e) {
+    console.error(`Error while getting transaction: ${e.message}`);
+    console.log(""); // Extra newline for separation
     return false;
   }
 }
