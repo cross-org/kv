@@ -1,3 +1,7 @@
+## 0.15.3
+
+- Internal fix; Always unblock sync even if a vacuum fails
+
 ## 0.15.2
 
 - Fixed a problem where records were overwritten during large atomic transaction

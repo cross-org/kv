@@ -438,11 +438,15 @@ export class KV extends EventEmitter {
     this.ensureIndex();
 
     this.blockSync = true;
-    await this.ledger?.vacuum();
+    try {
+      await this.ledger?.vacuum();
 
-    // Force re-opening the database
-    await this.open(this.ledgerPath!, false);
-    this.blockSync = false;
+      // Force re-opening the database
+      await this.open(this.ledgerPath!, false);
+    } finally {
+      // Ensure blockSync is reset even if vacuum throws an error
+      this.blockSync = false;
+    }
   }
 
   /**

@@ -31,34 +31,38 @@ async function stats(
   console.log(""); // Add an empty line for better readability
 
   console.log(Colors.bold(Colors.blue("System Memory:")));
-  console.log(Colors.dim(`  Total:      `), formatBytes(sysMemory.total || 0));
-  console.log(Colors.dim(`  Free:       `), formatBytes(sysMemory.free || 0));
   console.log(
-    Colors.dim(`  Available:  `),
-    formatBytes(sysMemory.available || 0),
+    Colors.dim(`  Total:      `),
+    formatBytes(sysMemory.total || 0),
+    `(${
+      Math.round(
+        (1 -
+          (sysMemory.available + sysMemory.free + sysMemory.buffers +
+                sysMemory.cached || 0) / (sysMemory.total || 1)) * 100,
+      )
+    }% used)`,
   );
   console.log(
-    Colors.dim(`  Buffers:    `),
-    formatBytes(sysMemory.buffers || 0),
+    Colors.dim(`  Free:       `),
+    formatBytes(
+      sysMemory.free + sysMemory.available + sysMemory.buffers +
+          sysMemory.buffers || 0,
+    ),
   );
-  console.log(Colors.dim(`  Cached:     `), formatBytes(sysMemory.cached || 0));
+
   console.log(
     Colors.dim(`  Swap Total: `),
     formatBytes(sysMemory.swapTotal || 0),
+    `(${
+      Math.round(
+        (1 - (sysMemory.swapFree || 0) / (sysMemory.swapTotal || 1)) * 100,
+      )
+    }% used)`,
   );
   console.log(
     Colors.dim(`  Swap Free:  `),
     formatBytes(sysMemory.swapFree || 0),
   );
-  console.log(
-    Colors.dim(`  Used:       `),
-    `${
-      Math.round(
-        (1 - (sysMemory.available || 0) / (sysMemory.total || 1)) * 100,
-      )
-    }%`,
-  ); // Calculate and log system memory usage percentage
-
   console.log("\n" + Colors.bold(Colors.blue("Database Statistics:")));
 
   // Ledger row count
