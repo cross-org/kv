@@ -22,6 +22,7 @@ import { stats } from "./commands/stats.ts";
 import { count } from "./commands/count.ts";
 import { vacuum } from "./commands/vacuum.ts";
 import { unlock } from "./commands/unlock.ts";
+import { sync } from "./commands/sync.ts";
 registerCommand("help", help);
 registerCommand("open", open);
 registerCommand("open:noindex", openNoIndex);
@@ -39,6 +40,7 @@ registerCommand("stats", stats);
 registerCommand("count", count);
 registerCommand("vacuum", vacuum);
 registerCommand("unlock", unlock);
+registerCommand("sync", sync);
 
 // Go!
 import { main, registerCommand } from "./loop.ts";

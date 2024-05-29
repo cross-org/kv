@@ -1,6 +1,7 @@
 ## 0.15.3
 
 - Internal fix; Always unblock sync even if a vacuum fails
+- Added `sync` cli command, to force a synchronization of the cli instance.
 
 ## 0.15.2
 
