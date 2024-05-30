@@ -1,3 +1,9 @@
+## 0.15.4
+
+- Fix for `prompt` totally blocking the event loop in the cli tool, preventing
+  synchronization.
+- Make the watchdog slightly more invincible.
+
 ## 0.15.3
 
 - Internal fix; Always unblock sync even if a vacuum fails

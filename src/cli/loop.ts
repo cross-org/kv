@@ -14,12 +14,17 @@ export function registerCommand(command: string, handler: KVCliHandler) {
 export async function main() {
   const container: KVDBContainer = {};
   let exit = false;
-
   while (!exit) {
+    // Collect user input
     const command = await prompt(Colors.blue(">"));
     if (command === null) {
       continue;
     }
+
+    // Yield to event loop, allowing any scheduled tasks to be executed
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Handle the user input
     const commandSplit = command.split(" ");
     const cmd = commandSplit[0].toLowerCase();
     const startTime = performance.now(); // Start measuring time
@@ -42,5 +47,8 @@ export async function main() {
     } else {
       console.error(Colors.red("Invalid command.\n"));
     }
+
+    // Yield to event loop, allowing any scheduled tasks to be executed
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }

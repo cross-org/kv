@@ -276,7 +276,9 @@ export class KV extends EventEmitter {
     this.watchdogTimer = setTimeout(
       async () => {
         // Make sure current run is done
-        await this.watchdogPromise;
+        try {
+          await this.watchdogPromise;
+        } catch (_e) { /* Ignore */ }
 
         // Initiate a new run
         this.watchdogPromise = this.watchdog();
