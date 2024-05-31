@@ -1,3 +1,17 @@
+## 0.15.5
+
+## Additions
+
+- Add argument `reverse` to `iterate` and `listAll` to allow almost instant
+  queries for "last x transactions matching query y".
+- Reduce lock time on writing new transactions.
+- Optimize the logic of writing new transactions.
+
+## Fixes
+
+- Make sure the results of `iterate` and `listAll` are returned in insertion
+  order, or reverse insertion order if `reverse` is set.
+
 ## 0.15.4
 
 - Fix for `prompt` totally blocking the event loop in the cli tool, preventing

@@ -620,3 +620,85 @@ test("KV: list keys after deletion", async () => {
 
   await kvStore.close();
 });
+
+test("KV: iterate in forward order with limit", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+
+  for (let i = 1; i <= 5; i++) {
+    await kvStore.set(["data", i], `Value ${i}`);
+  }
+
+  const limit = 3;
+  const expectedValues = ["Value 1", "Value 2", "Value 3"]; // Expected in reverse order
+  const results = [];
+
+  for await (const entry of kvStore.iterate(["data"], limit, false)) { // true for reverse
+    results.push(entry.data);
+  }
+
+  assertEquals(results, expectedValues); // Check if values match and are in the correct order
+  await kvStore.close();
+});
+
+test("KV: listAll in forward order with limit", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+
+  for (let i = 1; i <= 5; i++) {
+    await kvStore.set(["data", i], `Value ${i}`);
+  }
+
+  const limit = 3;
+  const expectedValues = ["Value 1", "Value 2", "Value 3"];
+
+  const results = (await kvStore.listAll(["data"], limit, false)).map((entry) =>
+    entry.data
+  );
+
+  assertEquals(results, expectedValues);
+  await kvStore.close();
+});
+
+test("KV: iterate in reverse order with limit", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+
+  for (let i = 1; i <= 5; i++) {
+    await kvStore.set(["data", i], `Value ${i}`);
+  }
+
+  const limit = 3;
+  const expectedValues = ["Value 5", "Value 4", "Value 3"]; // Expected in reverse order
+  const results = [];
+
+  for await (const entry of kvStore.iterate(["data"], limit, true)) { // true for reverse
+    results.push(entry.data);
+  }
+
+  assertEquals(results, expectedValues); // Check if values match and are in the correct order
+  await kvStore.close();
+});
+
+test("KV: listAll in reverse order with limit", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+
+  for (let i = 1; i <= 5; i++) {
+    await kvStore.set(["data", i], `Value ${i}`);
+  }
+
+  const limit = 3;
+  const expectedValues = ["Value 5", "Value 4", "Value 3"];
+
+  const results = (await kvStore.listAll(["data"], limit, true)).map((entry) =>
+    entry.data
+  );
+
+  assertEquals(results, expectedValues);
+  await kvStore.close();
+});

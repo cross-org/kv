@@ -111,9 +111,11 @@ deno install -frA --name ckv jsr:@cross/kv/cli
     `createIfMissing` defaults to true.
   - `async set<T>(key, value)` - Stores a value.
   - `async get<T>(key)` - Retrieves a value.
-  - `async *iterate<T>(query)` - Iterates over entries for a key.
+  - `async *iterate<T>(query, limit, reverse)` - Iterates over entries for a
+    key. Limit and reverse are optional.
+  - `async listAll<T>(query, limit, reverse)` - Gets all entries for a key as an
+    array. Limit and reverse are optional.
   - `listKeys(query)` - List all keys under <query>.
-  - `async listAll<T>(query)` - Gets all entries for a key as an array.
   - `async delete(key)` - Deletes a key-value pair.
   - `async sync()` - Synchronizez the ledger with disk.
   - `watch<T>(query, callback, recursive): void` - Registers a callback to be

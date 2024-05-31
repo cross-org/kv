@@ -512,6 +512,7 @@ export class KV extends EventEmitter {
    * @param key - Representation of the key to search for.
    * @param limit - (Optional) Maximum number of entries to yield. If not provided, all
    *               entries associated with the key will be yielded.
+   * @param reverse - (Optional) Return the results in reverse insertion order, most recent first. Defaulting to false - oldest first.
    * @yields An object containing the `ts` (timestamp) and `data` for each matching entry.
    *
    * @example
@@ -527,12 +528,13 @@ export class KV extends EventEmitter {
   public async *iterate<T = unknown>(
     key: KVQuery,
     limit?: number,
+    reverse: boolean = false,
   ): AsyncGenerator<KVTransactionResult<T>> {
     // Throw if database isn't open
     this.ensureOpen();
     this.ensureIndex();
     const validatedKey = new KVKeyInstance(key, true);
-    const offsets = this.index!.get(validatedKey, limit)!;
+    const offsets = this.index!.get(validatedKey, limit, reverse)!;
 
     if (offsets === null || offsets.length === 0) {
       return; // No results to yield
@@ -556,17 +558,22 @@ export class KV extends EventEmitter {
    * all yielded entries into an array.
    *
    * @param key - Representation of the key to query.
+   * @param limit - (Optional) Maximum number of entries to return. If not provided, all
+   *               entries associated with the key will be yielded.
+   * @param reverse - (Optional) Return the results in reverse insertion order, most recent first. Defaulting to false - oldest first.
    * @returns A Promise that resolves to an array of all matching data entries.
    */
   public async listAll<T = unknown>(
     key: KVQuery,
+    limit?: number,
+    reverse: boolean = false,
   ): Promise<KVTransactionResult<T>[]> {
     // Throw if database isn't open
     this.ensureOpen();
     this.ensureIndex();
 
     const entries: KVTransactionResult<T>[] = [];
-    for await (const entry of this.iterate<T>(key)) {
+    for await (const entry of this.iterate<T>(key, limit, reverse)) {
       entries.push(entry);
     }
     return entries;
@@ -690,17 +697,8 @@ export class KV extends EventEmitter {
       currentOffset += transactionData.length;
     }
 
-    // Convert buffered transactions to Uint8Array[]
-    const transactionsData = new Uint8Array(currentOffset);
-    currentOffset = 0;
-    for (const transaction of bufferedTransactions) {
-      transactionsData.set(
-        transaction.transactionData,
-        transaction.relativeOffset,
-      );
-    }
-
     await this.ledger!.lock();
+    let unlocked = false;
     try {
       // Sync before writing the transactions
       const syncResult = await this.sync(false, false);
@@ -708,13 +706,12 @@ export class KV extends EventEmitter {
         throw syncResult.error;
       }
 
-      // Convert buffered transactions to Uint8Array[]
-      const transactionsData = bufferedTransactions.map(({ transactionData }) =>
-        transactionData
-      );
-
       // Write all buffered transactions at once and get the base offset
-      const baseOffset = await this.ledger!.add(transactionsData);
+      const baseOffset = await this.ledger!.add(bufferedTransactions);
+
+      // Unlock early if everying successed
+      await this.ledger!.unlock();
+      unlocked = true;
 
       // Update the index and check for errors
       for (
@@ -745,7 +742,8 @@ export class KV extends EventEmitter {
         }
       }
     } finally {
-      await this.ledger!.unlock();
+      // Back-up unlock
+      if (!unlocked) await this.ledger!.unlock();
       this.pendingTransactions = []; // Clear pending transactions
       this.isInTransaction = false;
     }

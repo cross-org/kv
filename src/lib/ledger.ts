@@ -287,7 +287,9 @@ export class KVLedger {
    * @param transactionsData An array of raw transaction data as Uint8Arrays.
    * @returns The base offset where the transactions were written.
    */
-  public async add(transactionsData: Uint8Array[]): Promise<number> {
+  public async add(transactionsData: {
+    transactionData: Uint8Array;
+  }[]): Promise<number> {
     this.ensureOpen();
 
     // Used to return the first offset of the series
@@ -300,7 +302,7 @@ export class KVLedger {
     let fd;
     try {
       fd = await rawOpen(this.dataPath, true);
-      for (const transactionData of transactionsData) {
+      for (const { transactionData } of transactionsData) {
         // Append each transaction data
         await writeAtPosition(fd, transactionData, currentOffset);
 
@@ -454,7 +456,9 @@ export class KVLedger {
           validTransaction.offset,
           true,
         );
-        await tempLedger.add([transaction.transaction.toUint8Array()]);
+        await tempLedger.add([{
+          transactionData: transaction.transaction.toUint8Array(),
+        }]);
       }
       this.header.currentOffset = tempLedger.header.currentOffset;
 

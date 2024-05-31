@@ -120,13 +120,11 @@ export class KVIndex {
    * @param key - The key to search for (can include ranges)
    * @returns An array of data row references.
    */
-  get(key: KVKeyInstance, limit?: number): number[] {
+  get(key: KVKeyInstance, limit?: number, reverse: boolean = false): number[] {
     const resultSet: number[] = [];
     const keyLength = key.get().length;
 
     function recurse(node: KVIndexContent, keyIndex: number): void {
-      if (limit !== undefined && resultSet.length >= limit) return; // Stop recursion early if limit reached
-
       if (keyIndex >= keyLength) {
         // We've reached the end of the key
         if (node.reference !== undefined) {
@@ -175,6 +173,15 @@ export class KVIndex {
 
     // Start recursion from the root of the tree
     recurse(this.index, 0);
+
+    // Sort the array by transaction offset, to give results sorted in insertion order
+    resultSet.sort();
+
+    // Reverse if requested, after sorting
+    if (reverse) resultSet.reverse();
+
+    // Limit if requested, after sorting and reversing
+    if (limit !== undefined) resultSet.splice(limit);
 
     return resultSet;
   }
