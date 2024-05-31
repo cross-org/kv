@@ -702,3 +702,37 @@ test("KV: listAll in reverse order with limit", async () => {
   assertEquals(results, expectedValues);
   await kvStore.close();
 });
+
+test("KV: iterate and listAll respect reverse insertion order with multiple key matches", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+
+  // Inserting items with a common prefix and different suffixes
+  await kvStore.set(["data", "d", "b"], "Value A");
+  await kvStore.set(["data", "c", "a"], "Value B");
+  await kvStore.set(["data", "c", "b"], "Value C");
+  await kvStore.set(["data", "a"], "Value D");
+
+  // Iterate in reverse order
+  const iterateResults = [];
+  for await (const entry of kvStore.iterate(["data"], undefined, true)) {
+    iterateResults.push(entry.data);
+  }
+  assertEquals(iterateResults, ["Value D", "Value C", "Value B", "Value A"]);
+
+  // ListAll in reverse order
+  const listAllResults = (await kvStore.listAll(["data"], undefined, true)).map(
+    (entry) => entry.data,
+  );
+  assertEquals(listAllResults, ["Value D", "Value C", "Value B", "Value A"]);
+
+  // ListAll in insertion order
+  const listAllResults2 = (await kvStore.listAll(["data"], undefined, false))
+    .map(
+      (entry) => entry.data,
+    );
+  assertEquals(listAllResults2, ["Value A", "Value B", "Value C", "Value D"]);
+
+  await kvStore.close();
+});

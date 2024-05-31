@@ -175,10 +175,8 @@ export class KVIndex {
     recurse(this.index, 0);
 
     // Sort the array by transaction offset, to give results sorted in insertion order
-    resultSet.sort();
-
-    // Reverse if requested, after sorting
-    if (reverse) resultSet.reverse();
+    // - Reverse if requested
+    resultSet.sort((a, b) => reverse ? b - a : a - b);
 
     // Limit if requested, after sorting and reversing
     if (limit !== undefined) resultSet.splice(limit);

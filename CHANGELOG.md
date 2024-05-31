@@ -1,3 +1,9 @@
+## 0.15.6
+
+## Additions
+
+- Fixed order of transactions returned by `iterate` and `listAll`
+
 ## 0.15.5
 
 ## Additions

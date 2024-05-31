@@ -534,6 +534,7 @@ export class KV extends EventEmitter {
     this.ensureOpen();
     this.ensureIndex();
     const validatedKey = new KVKeyInstance(key, true);
+
     const offsets = this.index!.get(validatedKey, limit, reverse)!;
 
     if (offsets === null || offsets.length === 0) {
@@ -547,7 +548,6 @@ export class KV extends EventEmitter {
         yield result.transaction.asResult();
         count++;
       }
-      if (limit && count >= limit) break;
     }
   }
 
