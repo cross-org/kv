@@ -36,10 +36,10 @@ bunfig.toml
 # Local
 lab/
 local/
-lab.db
 lab.ts
 local.ts
 mydatabase*/
+*.db
 
 # Pup data
 .pup
