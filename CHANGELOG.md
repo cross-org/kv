@@ -1,3 +1,13 @@
+## Unrelesed
+
+## Changes
+
+- Remove sync result `noop` as isn't used anywhere anymore
+
+## Fixes
+
+- Fixed Deno panic on decoding data from cache
+
 ## 0.15.7
 
 ## Changes

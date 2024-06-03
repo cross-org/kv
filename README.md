@@ -267,7 +267,6 @@ await kvStore.open("db/mydatabase.db");
 kvStore.on("sync", (eventData) => {
   switch (eventData.result) {
     case "ready": // No new updates
-    case "blocked": // Synchronization temporarily blocked (e.g., during vacuum)
     case "success": // Synchronization successful, new transactions added
     case "ledgerInvalidated": // Ledger recreated, database reopened and index resynchronized
     case "error": // An error occurred during synchronization

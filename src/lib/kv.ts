@@ -18,7 +18,6 @@ import { EventEmitter } from "node:events";
  * Represents the status of a synchronization operation between the in-memory index and the on-disk ledger.
  */
 export type KVSyncResultStatus =
-  | "noop" /** No operation was performed (e.g., ledger not open). */
   | "ready" /** The database is ready, no new data to synchronize. */
   | "success" /** Synchronization completed successfully, new data was added. */
   | "ledgerInvalidated" /** The ledger was invalidated and needs to be reopened. */
