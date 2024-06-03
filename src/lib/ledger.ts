@@ -120,7 +120,7 @@ export class KVLedger {
     try {
       await this.readHeader();
 
-      // If the ledger is re-created (by vacuum or overwriting), there will be a time in the cached header
+      // If the ledger is re-created (by vacuum or overwriting), there will be one time in the cached header
       // and there will be a different time after reading the header
       if (currentCreated !== 0 && currentCreated !== this.header.created) {
         // Return 0 to invalidate this ledger
@@ -205,11 +205,13 @@ export class KVLedger {
    *
    * @param query
    * @param recursive
+   * @param fetchData
    * @returns An async generator yielding `KVLedgerResult` objects for each matching transaction.
    */
   public async *scan(
     query: KVQuery,
     recursive: boolean,
+    fetchData: boolean = true,
   ): AsyncIterableIterator<KVLedgerResult> {
     this.ensureOpen();
 
@@ -228,7 +230,7 @@ export class KVLedger {
         );
         if (result.transaction.key?.matchesQuery(query, recursive)) {
           // Check for completeness
-          if (result.complete) {
+          if (result.complete || !fetchData) {
             yield result;
           } else {
             const completeResult = await this.rawGetTransaction(
@@ -335,7 +337,7 @@ export class KVLedger {
     try {
       if (!externalFd) fd = await rawOpen(this.dataPath, false);
 
-      // Fetch 2 + 4 + 4 bytes (signature, header length, data length) + prefetch
+      // Fetch 2 + 4 + 4 bytes (signature, header length, data length)
       const transactionLengthData = await readAtPosition(
         fd!,
         TRANSACTION_SIGNATURE.length + 4 + 4,

@@ -71,7 +71,7 @@ async function stats(
   let ledgerInvalidCount = 0;
   if (kvStore) {
     try {
-      for await (const entry of kvStore.scan([], true)) {
+      for await (const entry of kvStore.scan([], true, false)) {
         if (entry.operation === KVOperation.SET) {
           ledgerSetCount++;
         } else if (entry.operation === KVOperation.DELETE) {

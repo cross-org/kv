@@ -139,10 +139,10 @@ export class KVTransaction {
   }
 
   public headerFromUint8Array(
-    data: Uint8Array | DataView,
+    data: Uint8Array,
     readHash: boolean = true,
   ) {
-    const dataView = data instanceof DataView ? data : new DataView(
+    const dataView = new DataView(
       data.buffer,
       data.byteOffset,
       data.byteLength,
@@ -167,11 +167,9 @@ export class KVTransaction {
 
     // Decode hash bytes
     if (readHash) {
-      this.hash = new Uint8Array(
-        dataView.buffer.slice(
-          dataView.byteOffset + offset,
-          dataView.byteOffset + offset + hashLength,
-        ),
+      this.hash = data.slice(
+        offset,
+        offset + hashLength,
       );
     }
     offset += hashLength;

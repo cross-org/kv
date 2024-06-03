@@ -107,31 +107,36 @@ deno install -frA --name ckv jsr:@cross/kv/cli
 ### Methods
 
 - `KV(options)` - Main class. Options are optional.
-  - `async open(filepath, createIfMissing)` - Opens the KV store.
-    `createIfMissing` defaults to true.
-  - `async set<T>(key, value)` - Stores a value.
-  - `async get<T>(key)` - Retrieves a value.
-  - `async *iterate<T>(query, limit, reverse)` - Iterates over entries for a
-    key. Limit and reverse are optional.
-  - `async listAll<T>(query, limit, reverse)` - Gets all entries for a key as an
-    array. Limit and reverse are optional.
-  - `listKeys(query)` - List all keys under <query>.
-  - `async delete(key)` - Deletes a key-value pair.
-  - `async sync()` - Synchronizez the ledger with disk.
+  - `async open(filepath, createIfMissing = true)` - OOpens the KV store at the
+    specified file path, creating it if it doesn't exist (default behavior).
+  - `async set<T>(key, value)` - Stores a value associated with the given key.
+  - `async delete(key)` - Removes the key-value pair identified by the key.
+  - `async get<T>(key)` - Retrieves the value associated with the specified key.
+    Returns null if the key does not exist.
+  - `async *iterate<T>(query, limit, reverse)` - Asynchronously iterates over
+    the latest values matching the query
+  - `async listAll<T>(query, limit, reverse)` - Retrieves all latest values
+    matching the query as an array.
+  - `async *scan<T>(query, limit, reverse)` - Asynchronously iterates over the
+    transaction history (all set and delete operations) for keys matching the
+    query. Optionally recurses into subkeys and fetches the associated data.
+  - `listKeys(query)` - Returns an array of all keys matching the given query.
+  - `async sync()` - Manually synchronizes the in-memory index with the on-disk
+    data store.
   - `watch<T>(query, callback, recursive): void` - Registers a callback to be
-    called whenever a new transaction matching the given query is added to the
-    database.
+    invoked whenever a matching transaction (set or delete) is added.
   - `unwatch<T>(query, callback): void` - Unregisters a previously registered
     watch handler.
-  - `beginTransaction()` - Starts an atomic transaction.
-  - `async endTransaction()` - Ends an atomic transaction, returns a list of
-    `Errors` if any occurred.
-  - `async vacuum()` - Reclaims storage space.
-  - `on(eventName, eventData)` - Listen for events such as `sync`,
-    `watchdogError` or `closing`.
-  - `isOpen()` - Returns true if the database is open and ready for
-    transactions.
-  - `async close()` - Closes the KV store.
+  - `beginTransaction()` - Starts an atomic transaction, ensuring data
+    consistency for multiple operations.
+  - `async endTransaction()` - Commits all changes made within the transaction,
+    or rolls back if errors occur.
+  - `async vacuum()` - Optimizes storage by removing redundant transaction
+    history, retaining only the latest value for each key.
+  - `on(eventName, eventData)` - Subscribes to events like `sync`,
+    `watchdogError`, or `closing` to get notified of specific occurrences.
+  - `isOpen()` - Returns true if the database is open and ready for operations.
+  - `async close()` - Closes the KV store, ensuring resources are released.
 
 ### Keys
 

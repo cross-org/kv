@@ -345,18 +345,20 @@ export class KV extends EventEmitter {
   }
 
   /**
-   * Asynchronously iterates over data entries associated with a given key.
+   * Asynchronously iterates over transactions associated with a given key.
    *
    * @param query - Representation of the key to search for, or a query object for complex filters.
    * @param recursive - Match all entries matching the given query, and recurse.
+   * @param fetchData - Return transactions with full data. Setting this to false improves performance, but does only yield transaction metadata.
    * @returns An async generator yielding `KVTransactionResult` objects for each matching entry.
    */
   public async *scan<T = unknown>(
     query: KVKey | KVQuery,
     recursive: boolean = false,
+    fetchData: boolean = true,
   ): AsyncGenerator<KVTransactionResult<T>> {
     this.ensureOpen();
-    for await (const result of this.ledger!.scan(query, recursive)) {
+    for await (const result of this.ledger!.scan(query, recursive, fetchData)) {
       if (result?.transaction) { // Null check to ensure safety
         const processedResult = result.transaction.asResult<T>(); // Apply your processing logic here
         yield processedResult;

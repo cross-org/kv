@@ -3,6 +3,8 @@
 ## Changes
 
 - Remove sync result `noop` as isn't used anywhere anymore
+- Adds `fetchData` option to `scan`. Setting this to `false` enables faster
+  retrieval of transaction metadata.
 
 ## Fixes
 
