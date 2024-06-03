@@ -20,7 +20,6 @@ import { EventEmitter } from "node:events";
 export type KVSyncResultStatus =
   | "noop" /** No operation was performed (e.g., ledger not open). */
   | "ready" /** The database is ready, no new data to synchronize. */
-  | "blocked" /** Synchronization is temporarily blocked (e.g., during a vacuum). */
   | "success" /** Synchronization completed successfully, new data was added. */
   | "ledgerInvalidated" /** The ledger was invalidated and needs to be reopened. */
   | "error"; /** An error occurred during synchronization. Check the `error` property for details. */
@@ -129,7 +128,6 @@ export class KV extends EventEmitter {
   private disableIndex = false;
 
   // States
-  private blockSync: boolean = false; // Syncing can be blocked during vacuum
   private aborted: boolean = false;
   private isInTransaction: boolean = false;
   private watchdogTimer?: number; // Undefined if not scheduled or currently running
@@ -215,7 +213,7 @@ export class KV extends EventEmitter {
 
     // Do the initial synchronization
     // - If `this.autoSync` is enabled, additional synchronizations will be carried out every `this.syncIntervalMs`
-    const syncResult = await this.sync(true);
+    const syncResult = await this.sync();
     if (syncResult.error) {
       throw syncResult.error;
     }
@@ -294,7 +292,6 @@ export class KV extends EventEmitter {
    * - Automatically run on adding data
    * - Can be manually triggered for full consistency before data retrieval (iterate(), listAll(), get())
    *
-   * @param force - (Optional) If true, forces synchronization even if currently blocked (e.g., vacuum). For internal use only.
    * @param doLock - (Optional) Locks the database before synchronization. Defaults to true. Always true unless called internally.
    *
    * @emits sync - Emits an event with the synchronization result:
@@ -303,16 +300,9 @@ export class KV extends EventEmitter {
    *
    * @throws {Error} If an unexpected error occurs during synchronization.
    */
-  public async sync(force = false, doLock = false): Promise<KVSyncResult> {
+  public async sync(doLock = false): Promise<KVSyncResult> {
     // Throw if database isn't open
-    if (force) this.ensureOpen();
-
-    if (this.blockSync && !force) {
-      const error = new Error("Store synchronization is blocked");
-      // @ts-ignore .emit exists
-      this.emit("sync", { result: "blocked", error });
-      return { result: "blocked", error };
-    }
+    this.ensureOpen();
 
     // Synchronization Logic (with lock if needed)
     let result: KVSyncResult["result"] = "ready";
@@ -429,7 +419,6 @@ export class KV extends EventEmitter {
    * It involves rewriting the ledger to remove deleted entries, potentially reducing its size.
    *
    * @remarks
-   * - Vacuuming temporarily blocks regular synchronization (`blockSync` is set to `true`).
    * - The database is automatically re-opened after the vacuum is complete to ensure consistency.
    *
    * @async
@@ -439,16 +428,8 @@ export class KV extends EventEmitter {
     this.ensureOpen();
     this.ensureIndex();
 
-    this.blockSync = true;
-    try {
-      await this.ledger?.vacuum();
-
-      // Force re-opening the database
-      await this.open(this.ledgerPath!, false);
-    } finally {
-      // Ensure blockSync is reset even if vacuum throws an error
-      this.blockSync = false;
-    }
+    const ledgerIsReplaced = await this.ledger?.vacuum();
+    if (ledgerIsReplaced) await this.open(this.ledgerPath!, false);
   }
 
   /**
@@ -496,7 +477,7 @@ export class KV extends EventEmitter {
     // Throw if database isn't open
     this.ensureOpen();
     this.ensureIndex();
-    for await (const entry of this.iterate<T>(key, 1)) {
+    for await (const entry of this.iterate<T>(key, 1, true)) {
       return entry;
     }
     return null;
@@ -610,10 +591,6 @@ export class KV extends EventEmitter {
   public async set<T = unknown>(key: KVKey, value: T): Promise<void> {
     // Throw if database isn't open
     this.ensureOpen();
-    // Throw if there is an ongoing vacuum
-    if (this.blockSync) {
-      throw new Error("Can not add data during vacuuming");
-    }
 
     // Ensure the key is ok
     const validatedKey = new KVKeyInstance(key);
@@ -645,10 +622,6 @@ export class KV extends EventEmitter {
    */
   async delete(key: KVKey): Promise<void> {
     this.ensureOpen(); // Throw if the database isn't open
-
-    if (this.blockSync) {
-      throw new Error("Cannot delete data during vacuuming");
-    }
 
     const validatedKey = new KVKeyInstance(key);
 
@@ -701,7 +674,7 @@ export class KV extends EventEmitter {
     let unlocked = false;
     try {
       // Sync before writing the transactions
-      const syncResult = await this.sync(false, false);
+      const syncResult = await this.sync();
       if (syncResult.error) {
         throw syncResult.error;
       }

@@ -1,3 +1,16 @@
+## 0.15.7
+
+## Changes
+
+- Do not freeze the database during vacuum
+- Reduce time in locked state during vacuum
+- Only unlock old ledger after successful vacuum
+- Only re-open ledger after successful vacuum
+
+## Fixes
+
+- Fixed Deno panic on decoding data from cache
+
 ## 0.15.6
 
 ## Additions

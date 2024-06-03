@@ -404,12 +404,10 @@ export class KVLedger {
   /**
    * Caution should be taken not to carry out any other operations during a vacuum
    */
-  public async vacuum() {
-    // 1. Lock for Exclusive Access
-    await this.lock();
-
+  public async vacuum(): Promise<boolean> {
+    let ledgerIsReplaced = false;
     try {
-      // 2. Gather All Transaction Offsets
+      // 1. Gather All Transaction Offsets
       const allOffsets: number[] = [];
       let currentOffset = LEDGER_BASE_OFFSET;
       while (currentOffset < this.header.currentOffset) {
@@ -419,7 +417,13 @@ export class KVLedger {
         );
         allOffsets.push(currentOffset);
         currentOffset += result.length;
+
+        // Update the header after each read, to make sure we catch any new transactions
+        this.readHeader();
       }
+
+      // 2. Now we need to lock the ledger, as a "state" is about to be calculated
+      await this.lock();
 
       // 3. Gather Valid Transactions (in Reverse Order)
       const validTransactions: KVLedgerResult[] = [];
@@ -439,10 +443,7 @@ export class KVLedger {
         }
       }
 
-      // 4. Clear cache
-      this.cache.clear();
-
-      // 5. Compact the Data File
+      // 4. Compact the Data File
       const tempFilePath = this.dataPath + "-tmp";
       const tempLedger = new KVLedger(
         tempFilePath,
@@ -450,7 +451,7 @@ export class KVLedger {
       );
       await tempLedger.open(true);
 
-      // 6. Append valid transactions to the new file.
+      // 5. Append valid transactions to the new file.
       for (const validTransaction of validTransactions) {
         const transaction = await this.rawGetTransaction(
           validTransaction.offset,
@@ -462,16 +463,20 @@ export class KVLedger {
       }
       this.header.currentOffset = tempLedger.header.currentOffset;
 
+      // 6. Clear cache
+      this.cache.clear();
+
       // 7. Replace Original File
+      // - The lock flag is now set independently, no need to unlock from this point on
       await unlink(this.dataPath);
       await rename(tempFilePath, this.dataPath);
-
-      // 8. Update the Cached Header
-      await this.readHeader();
+      ledgerIsReplaced = true;
     } finally {
       // 9. Unlock
-      await this.unlock();
+      if (ledgerIsReplaced) await this.unlock();
     }
+
+    return ledgerIsReplaced;
   }
 
   private ensureOpen(): void {

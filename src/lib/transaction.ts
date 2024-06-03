@@ -133,7 +133,7 @@ export class KVTransaction {
     this.operation = operation;
     this.timestamp = timestamp;
     if (value) {
-      this.data = encode(value);
+      this.data = new Uint8Array(encode(value));
       this.hash = await sha1(this.data!);
     }
   }
