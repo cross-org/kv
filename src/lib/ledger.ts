@@ -86,7 +86,7 @@ export class KVLedger {
 
     // Read or create the file header
     if (alreadyExists) {
-      /* No-op, sync reads the header from file when needed */
+      // No-op, sync reads the header from file when needed
     } else if (createIfMissing) {
       this.header.created = Date.now();
       await this.writeHeader();
@@ -113,7 +113,7 @@ export class KVLedger {
     const newTransactions = [] as KVLedgerResult[];
 
     let currentOffset = this.header.currentOffset; // Get from the cached header
-    const currentCreated = this.header.created; // Get from the cached header
+    const currentCreated = this.header.created;
 
     // Update offset
     let reusableFd;
@@ -123,7 +123,7 @@ export class KVLedger {
       // If the ledger is re-created (by vacuum or overwriting), there will be one time in the cached header
       // and there will be a different time after reading the header
       if (currentCreated !== 0 && currentCreated !== this.header.created) {
-        // Return 0 to invalidate this ledger
+        // Return null to invalidate this ledger
         return null;
       }
 
@@ -142,7 +142,7 @@ export class KVLedger {
               false,
               reusableFd,
             );
-            newTransactions.push(result); // Add the    transaction
+            newTransactions.push(result);
             currentOffset += result.length; // Advance the offset
             failures = 0;
           } catch (_e) {
@@ -253,7 +253,7 @@ export class KVLedger {
     let fd;
     try {
       fd = await rawOpen(this.dataPath, true);
-      // Assuming the same header structure as before
+
       const headerDataSize = 4 + 4 + 8 + 8; // 4 bytes for fileId, 4 for version, 8 for created, 8 for offset
       const headerBuffer = new ArrayBuffer(headerDataSize);
       const headerView = new DataView(headerBuffer);
@@ -310,10 +310,10 @@ export class KVLedger {
 
         currentOffset += transactionData.length;
 
-        // Update the current offset in the header
+        // Update the current offset in the cached header
         this.header.currentOffset = currentOffset;
       }
-      await this.writeHeader(); // Update header with the new offset
+      await this.writeHeader(); // Update the on disk header with the new offset
     } finally {
       if (fd) fd.close();
     }

@@ -1,6 +1,6 @@
 {
   "name": "@cross/kv",
-  "version": "0.15.7",
+  "version": "0.15.8",
   "exports": {
     ".": "./mod.ts",
     "./cli": "./src/cli/mod.ts"

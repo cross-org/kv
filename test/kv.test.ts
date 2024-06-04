@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { test } from "@cross/test";
 import { KV, type KVOptions } from "../src/lib/kv.ts";
 import { tempfile } from "@cross/fs";
@@ -735,4 +735,139 @@ test("KV: iterate and listAll respect reverse insertion order with multiple key 
   assertEquals(listAllResults2, ["Value A", "Value B", "Value C", "Value D"]);
 
   await kvStore.close();
+});
+
+test("KV: abortTransaction reverts changes", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+
+  await kvStore.set(["user", "name"], "Alice");
+
+  kvStore.beginTransaction();
+  await kvStore.set(["user", "name"], "Bob");
+  await kvStore.set(["user", "age"], 35);
+  kvStore.abortTransaction();
+
+  // Verify changes are reverted after abort
+  const userName = (await kvStore.get(["user", "name"]))?.data;
+  assertEquals(userName, "Alice", "Name should revert to original after abort");
+
+  const userAge = await kvStore.get(["user", "age"]);
+  assertEquals(userAge, null, "Age should not exist after abort");
+
+  await kvStore.close();
+});
+
+test("KV: beginTransaction throws if called before ending previous transaction", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+
+  kvStore.beginTransaction();
+  assertThrows(
+    () => kvStore.beginTransaction(), // Call beginTransaction again
+    Error,
+    "Already in a transaction",
+  );
+
+  // Ensure the store is cleaned up even after the error
+  kvStore.abortTransaction();
+  await kvStore.close();
+});
+
+test("KV: getLedgerPath returns correct path", async () => {
+  const expectedLedgerPath = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(expectedLedgerPath);
+
+  const actualLedgerPath = kvStore.getLedgerPath();
+
+  assertEquals(
+    actualLedgerPath,
+    expectedLedgerPath,
+    "Ledger path should match the expected path",
+  );
+
+  await kvStore.close();
+});
+
+test("KV: get and listAll throw when disableIndex is set", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV({ disableIndex: true });
+  await kvStore.open(tempFilePrefix);
+
+  await kvStore.set(["key"], "value");
+
+  assertRejects(
+    async () => await kvStore.get(["key"]),
+    Error,
+    "Operation not available due to `disableIndex` option being set.",
+  );
+
+  assertRejects(
+    async () => await kvStore.listAll(["key"]),
+    Error,
+    "Operation not available due to `disableIndex` option being set.",
+  );
+
+  await kvStore.close();
+});
+
+test("KV: getLedgerPath returns correct path and undefined after closing", async () => {
+  const expectedLedgerPath = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(expectedLedgerPath);
+
+  // Before closing: Path should match
+  const actualLedgerPath = kvStore.getLedgerPath();
+  assertEquals(
+    actualLedgerPath,
+    expectedLedgerPath,
+    "Ledger path should match the expected path",
+  );
+
+  // After closing: Path should be undefined
+  await kvStore.close();
+  const pathAfterClose = kvStore.getLedgerPath();
+  assertEquals(
+    pathAfterClose,
+    undefined,
+    "Ledger path should be undefined after closing",
+  );
+});
+
+test("KV Options: throws on invalid ledgerCacheSize type", () => {
+  const options: KVOptions = {
+    // @ts-expect-error Test
+    ledgerCacheSize: "not a number", // Incorrect type
+  };
+  assertThrows(
+    () => new KV(options),
+    TypeError,
+    "Invalid option: ledgerCacheSize must be a positive integer or zero",
+  );
+});
+
+test("KV Options: throws on negative ledgerCacheSize", () => {
+  const options: KVOptions = {
+    ledgerCacheSize: -1000, // Negative value
+  };
+  assertThrows(
+    () => new KV(options),
+    TypeError,
+    "Invalid option: ledgerCacheSize must be a positive integer or zero",
+  );
+});
+
+test("KV Options: throws on invalid disableIndex type", () => {
+  const options: KVOptions = {
+    // @ts-expect-error Test
+    disableIndex: "not a boolean", // Incorrect type
+  };
+  assertThrows(
+    () => new KV(options),
+    TypeError,
+    "Invalid option: disableIndex must be a boolean",
+  );
 });

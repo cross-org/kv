@@ -1,10 +1,14 @@
 ## Unrelesed
 
-## Changes
+## 0.15.8
 
-- Remove sync result `noop` as isn't used anywhere anymore
+- Remove sync result `noop` as isn't used anywhere anymore.
 - Adds `fetchData` option to `scan`. Setting this to `false` enables faster
   retrieval of transaction metadata.
+- Change the `stats` cli command to use the new fast scan.
+- Fix ledgerPath not being reset on close.
+- Adds missing commands to the cli `help` output.
+- Remove `a.bridge() // this is bridge`-comments
 
 ## Fixes
 

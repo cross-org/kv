@@ -167,7 +167,7 @@ export class KV extends EventEmitter {
         options.ledgerCacheSize <= 0)
     ) {
       throw new TypeError(
-        "Invalid option: ledgerCacheSize must be a positive integer",
+        "Invalid option: ledgerCacheSize must be a positive integer or zero",
       );
     }
     this.ledgerCacheSize = options.ledgerCacheSize ?? this.ledgerCacheSize;
@@ -360,7 +360,7 @@ export class KV extends EventEmitter {
     this.ensureOpen();
     for await (const result of this.ledger!.scan(query, recursive, fetchData)) {
       if (result?.transaction) { // Null check to ensure safety
-        const processedResult = result.transaction.asResult<T>(); // Apply your processing logic here
+        const processedResult = result.transaction.asResult<T>();
         yield processedResult;
       }
     }
@@ -425,7 +425,6 @@ export class KV extends EventEmitter {
    * @async
    */
   public async vacuum(): Promise<void> {
-    // Throw if database isn't open
     this.ensureOpen();
     this.ensureIndex();
 
@@ -438,7 +437,6 @@ export class KV extends EventEmitter {
    * @throws {Error} If already in a transaction.
    */
   public beginTransaction() {
-    // Throw if database isn't open
     this.ensureOpen();
 
     if (this.isInTransaction) throw new Error("Already in a transaction");
@@ -475,7 +473,6 @@ export class KV extends EventEmitter {
   public async get<T = unknown>(
     key: KVKey,
   ): Promise<KVTransactionResult<T> | null> {
-    // Throw if database isn't open
     this.ensureOpen();
     this.ensureIndex();
     for await (const entry of this.iterate<T>(key, 1, true)) {
@@ -512,7 +509,6 @@ export class KV extends EventEmitter {
     limit?: number,
     reverse: boolean = false,
   ): AsyncGenerator<KVTransactionResult<T>> {
-    // Throw if database isn't open
     this.ensureOpen();
     this.ensureIndex();
     const validatedKey = new KVKeyInstance(key, true);
@@ -550,7 +546,6 @@ export class KV extends EventEmitter {
     limit?: number,
     reverse: boolean = false,
   ): Promise<KVTransactionResult<T>[]> {
-    // Throw if database isn't open
     this.ensureOpen();
     this.ensureIndex();
 
@@ -574,7 +569,6 @@ export class KV extends EventEmitter {
    * @remarks
    */
   public count(key: KVQuery): number {
-    // Throw if database isn't open
     this.ensureOpen();
     this.ensureIndex();
 
@@ -590,7 +584,6 @@ export class KV extends EventEmitter {
    * @param value - The value to store.
    */
   public async set<T = unknown>(key: KVKey, value: T): Promise<void> {
-    // Throw if database isn't open
     this.ensureOpen();
 
     // Ensure the key is ok
@@ -622,7 +615,7 @@ export class KV extends EventEmitter {
    * @throws {Error} If the key is not found in the index, or if the database or ledger file is closed.
    */
   async delete(key: KVKey): Promise<void> {
-    this.ensureOpen(); // Throw if the database isn't open
+    this.ensureOpen();
 
     const validatedKey = new KVKeyInstance(key);
 
@@ -813,6 +806,13 @@ export class KV extends EventEmitter {
 
     // Abort any watchdog timer
     clearTimeout(this.watchdogTimer!);
+
+    // Clear all local variables to avoid problems with unexpected usage after closing
+    this.ledgerPath = undefined;
+    this.ledger = undefined;
+    this.index = new KVIndex();
+    this.pendingTransactions = [];
+    this.watchHandlers = [];
   }
 
   /**

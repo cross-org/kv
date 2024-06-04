@@ -46,9 +46,18 @@ const helpMessage = `
   Colors.yellow("count")
 } [query]             Counts key-value pairs recursively matching the optional query.
   ${
+  Colors.yellow("vacuum")
+}                    Compacts the database file to reclaim space.
+  ${
+  Colors.yellow("unlock")
+}                    Forcefully releases the database lock if it's held.
+  ${
   Colors.yellow("stats")
 }                     Displays database and process information.
   ${Colors.yellow("help")}                      Shows this help message.
+  ${
+  Colors.yellow("close")
+}                     Closes the currently open database.
   ${Colors.yellow("exit")}                      Exits the CLI.
 `;
 
