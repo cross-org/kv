@@ -461,7 +461,7 @@ export class KV extends EventEmitter {
    * @returns True if open, false if closed.
    */
   public isOpen(): boolean {
-    return !!this.ledger && this.ledger.isOpen();
+    return !this.aborted && !!this.ledger && this.ledger.isOpen();
   }
 
   /**

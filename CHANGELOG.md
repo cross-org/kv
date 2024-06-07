@@ -1,5 +1,9 @@
 ## Unrelesed
 
+## 0.15.9
+
+- Fix `isOpen´ to return false while closing the database
+
 ## 0.15.8
 
 - Remove sync result `noop` as isn't used anywhere anymore.
