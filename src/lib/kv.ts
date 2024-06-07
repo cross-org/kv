@@ -358,10 +358,14 @@ export class KV extends EventEmitter {
     fetchData: boolean = true,
   ): AsyncGenerator<KVTransactionResult<T>> {
     this.ensureOpen();
-    for await (const result of this.ledger!.scan(query, recursive, fetchData)) {
-      if (result?.transaction) { // Null check to ensure safety
-        const processedResult = result.transaction.asResult<T>();
-        yield processedResult;
+    if (this.ledger) {
+      for await (
+        const result of this.ledger?.scan(query, recursive, fetchData)
+      ) {
+        if (result?.transaction) { // Null check to ensure safety
+          const processedResult = result.transaction.asResult<T>();
+          yield processedResult;
+        }
       }
     }
   }
@@ -664,7 +668,7 @@ export class KV extends EventEmitter {
       currentOffset += transactionData.length;
     }
 
-    await this.ledger!.lock();
+    await this.ledger?.lock();
     let unlocked = false;
     try {
       // Sync before writing the transactions
@@ -674,10 +678,16 @@ export class KV extends EventEmitter {
       }
 
       // Write all buffered transactions at once and get the base offset
-      const baseOffset = await this.ledger!.add(bufferedTransactions);
+      const baseOffset = await this.ledger?.add(bufferedTransactions);
+
+      if (baseOffset === undefined) {
+        throw new Error(
+          "Database closed during transaction, data could possibly be lost.",
+        );
+      }
 
       // Unlock early if everying successed
-      await this.ledger!.unlock();
+      await this.ledger?.unlock();
       unlocked = true;
 
       // Update the index and check for errors
@@ -687,7 +697,7 @@ export class KV extends EventEmitter {
       ) {
         try {
           // Add to ledger cache
-          this.ledger!.cache.cacheTransactionData(
+          this.ledger?.cache.cacheTransactionData(
             baseOffset + relativeOffset,
             {
               offset: baseOffset + relativeOffset,
@@ -710,7 +720,7 @@ export class KV extends EventEmitter {
       }
     } finally {
       // Back-up unlock
-      if (!unlocked) await this.ledger!.unlock();
+      if (!unlocked) await this.ledger?.unlock();
       this.pendingTransactions = []; // Clear pending transactions
       this.isInTransaction = false;
     }

@@ -1,5 +1,10 @@
 ## Unrelesed
 
+## 0.15.10
+
+- Do not assume that the ledger is open for the full duration of each method
+  call.
+
 ## 0.15.9
 
 - Fix `isOpen´ to return false while closing the database
