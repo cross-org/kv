@@ -291,26 +291,20 @@ export class KV extends EventEmitter {
    * - Automatically run on adding data
    * - Can be manually triggered for full consistency before data retrieval (iterate(), listAll(), get())
    *
-   * @param doLock - (Optional) Locks the database before synchronization. Defaults to true. Always true unless called internally.
-   *
    * @emits sync - Emits an event with the synchronization result:
    *   - `result`: "ready" | "blocked" | "success" | "ledgerInvalidated" | "error"
    *   - `error`: Error object (if an error occurred) or null
    *
    * @throws {Error} If an unexpected error occurs during synchronization.
    */
-  public async sync(doLock = false): Promise<KVSyncResult> {
+  public async sync(): Promise<KVSyncResult> {
     // Throw if database isn't open
     this.ensureOpen();
 
     // Synchronization Logic (with lock if needed)
     let result: KVSyncResult["result"] = "ready";
     let error: Error | null = null;
-    let lockSucceeded = false; // Keeping track as we only want to unlock the database later, if the locking operation succeeded
     try {
-      if (doLock) await this.ledger?.lock();
-      lockSucceeded = true;
-
       const newTransactions = await this.ledger?.sync(this.disableIndex);
 
       if (newTransactions === null) { // Ledger invalidated
@@ -336,7 +330,6 @@ export class KV extends EventEmitter {
       result = "error";
       error = new Error("Error during ledger sync", { cause: syncError });
     } finally {
-      if (doLock && lockSucceeded) await this.ledger?.unlock();
       // @ts-ignore .emit exists
       this.emit("sync", { result, error });
     }

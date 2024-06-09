@@ -18,16 +18,15 @@ async function setupDenoKV() {
 
 const crossStore = await setupKV();
 const denoStore = await setupDenoKV();
-let crossIterTransaction = 0;
-let denoIterTransaction = 0;
 
 await Deno.bench("cross_kv_set_100_atomic", async () => {
   await crossStore.beginTransaction();
   for (let i = 0; i < 100; i++) {
-    await crossStore.set(["testKey", crossIterTransaction++], {
+    const randomUUID = crypto.randomUUID();
+    await crossStore.set(["testKey", randomUUID], {
       data: {
         data: "testData",
-        i: crossIterTransaction,
+        i: randomUUID,
         more: {
           "test": "data",
           "with1": new Date(),
@@ -47,10 +46,11 @@ await Deno.bench("cross_kv_set_100_atomic", async () => {
 await Deno.bench("deno_kv_set_100_atomic", async () => {
   const at = denoStore.atomic();
   for (let i = 0; i < 100; i++) {
-    at.set(["testKey", denoIterTransaction++], {
+    const randomUUID = crypto.randomUUID();
+    at.set(["testKey", randomUUID], {
       data: {
         data: "testData",
-        i: denoIterTransaction,
+        i: randomUUID,
         more: {
           "test": "data",
           "with1": new Date(),
@@ -108,9 +108,17 @@ await Deno.bench("deno_kv_set", async () => {
 });
 
 await Deno.bench("cross_kv_get", async () => {
-  await crossStore.get(["testKey", 3]);
+  await crossStore.get(["testKey2", 3]);
 });
 
 await Deno.bench("deno_kv_get", async () => {
-  await denoStore.get(["testKey", 3]);
+  await denoStore.get(["testKey2", 3]);
+});
+
+await Deno.bench("cross_kv_get_nonexisting", async () => {
+  await crossStore.get(["testKey2", "eh"]);
+});
+
+await Deno.bench("deno_kv_get_nonexisting", async () => {
+  await denoStore.get(["testKey2", "eh"]);
 });

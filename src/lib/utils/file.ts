@@ -3,11 +3,17 @@ import { CurrentRuntime, Runtime } from "@cross/runtime";
 import { cwd, isDir, isFile, mkdir } from "@cross/fs";
 import { dirname, isAbsolute, join, resolve } from "@std/path";
 
-export function toAbsolutePath(filename: string): string {
+export function toNormalizedAbsolutePath(filename: string): string {
   let filePath;
   if (isAbsolute(filename)) {
+    // Even if the input is already an absolute path, it might not be normalized:
+    // - It could contain ".." or "." segments that need to be resolved.
+    // - It might have extra separators that need to be cleaned up.
+    // - It might not use the correct separator for the current OS.
     filePath = resolve(filename);
   } else {
+    // If the input is relative, combine it with the current working directory
+    // and then resolve to get a fully normalized absolute path.
     filePath = resolve(join(cwd(), filename));
   }
   return filePath;

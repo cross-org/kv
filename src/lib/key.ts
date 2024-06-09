@@ -67,20 +67,13 @@ export class KVKeyInstance {
   private key: KVQuery | KVKey;
   private isQuery: boolean;
   public byteLength?: number;
-  hasData: boolean = false;
   constructor(
-    key: KVQuery | KVKey | Uint8Array | DataView,
+    key: KVQuery | KVKey | DataView,
     isQuery: boolean = false,
     validate: boolean = true,
   ) {
-    if (key instanceof Uint8Array) {
-      this.key = this.fromUint8Array(
-        new DataView(key.buffer, key.byteOffset, key.byteLength),
-      );
-      this.hasData = true;
-    } else if (key instanceof DataView) {
+    if (key instanceof DataView) {
       this.key = this.fromUint8Array(key);
-      this.hasData = true;
     } else {
       this.key = key;
     }
@@ -134,6 +127,7 @@ export class KVKeyInstance {
       keyArray.set(bytes, keyOffset);
       keyOffset += bytes.length;
     }
+
     return keyArray;
   }
 
@@ -224,6 +218,15 @@ export class KVKeyInstance {
           throw new TypeError(
             'Ranges must have only "from" and/or "to" keys',
           );
+        }
+
+        // Check for not mixing number from with string to and vice versa
+        if (
+          (typeof element.from === "number" &&
+            typeof element.to === "string") ||
+          (typeof element.from === "string" && typeof element.to === "number")
+        ) {
+          throw new TypeError("Cannot mix string and number in ranges");
         }
       }
 

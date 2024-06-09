@@ -1,4 +1,11 @@
-## Unrelesed
+## 0.15.11
+
+- Remove option doLock from `.sync()`
+- Remove unused code from `key.ts`
+- Add benchmark for getting data that does not exist
+- Rename internal function `toAbsolutePath` to `toNormalizedAbsolutePath` and
+  clarify code with additional comments
+- Adds various missing test to reduce the risk for regression bugs
 
 ## 0.15.10
 

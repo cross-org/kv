@@ -2,7 +2,7 @@ import {
   ensureFile,
   rawOpen,
   readAtPosition,
-  toAbsolutePath,
+  toNormalizedAbsolutePath,
   writeAtPosition,
 } from "./utils/file.ts";
 import {
@@ -71,7 +71,7 @@ export class KVLedger {
   };
 
   constructor(filePath: string, maxCacheSizeMBytes: number) {
-    this.dataPath = toAbsolutePath(filePath);
+    this.dataPath = toNormalizedAbsolutePath(filePath);
     this.cache = new KVLedgerCache(maxCacheSizeMBytes * 1024 * 1024);
   }
 

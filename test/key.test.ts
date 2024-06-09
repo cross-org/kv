@@ -212,3 +212,98 @@ test("KVKeyInstance: parse error on invalid range format", () => {
     KVKeyInstance.parse("users.>=abc.<=123", false);
   }, TypeError);
 });
+
+test("KVKeyInstance: Throws if trying to use something other than an array for a key", () => {
+  assertThrows(
+    () => new KVKeyInstance("users.data.user123" as unknown as KVKey),
+    TypeError,
+    "Key must be an array",
+  );
+});
+
+test("KVKeyInstance: Throws if trying to use something other than a string or number for a key element", () => {
+  assertThrows(
+    // @ts-ignore expected to be wrong
+    () => new KVKeyInstance(["users", null]),
+    TypeError,
+    "Key ranges are only allowed in queries",
+  );
+});
+
+test("KVKeyInstance: Throws if trying to use an object with extra properties for a key element", () => {
+  assertThrows(
+    // @ts-ignore extected to be wrong
+    () => new KVKeyInstance(["users", { from: 100, extra: "value" }], true),
+    TypeError,
+    "Ranges must have only",
+  );
+});
+
+test("KVKeyInstance: Throws if trying to mix strings and numbers in a range for a key element", () => {
+  assertThrows(
+    () => new KVKeyInstance(["users", { from: "abc", to: 123 }], true),
+    TypeError,
+    "Cannot mix string and number in ranges",
+  );
+});
+
+test("KVKeyInstance: Throws if trying to use an object with invalid range values for a key element", () => {
+  assertThrows(
+    () => new KVKeyInstance(["users", { from: 123, to: "abc" }], true, true),
+    TypeError,
+    "Cannot mix string and number in ranges",
+  );
+});
+
+test("KVKeyInstance: throws when parsing a key with empty elements", () => {
+  assertThrows(
+    () => KVKeyInstance.parse("users..profile", false),
+    TypeError,
+    "Key ranges are only allowed in queries",
+  );
+});
+
+test("KVKeyInstance: stringify and parse with empty elements", () => {
+  // Empty object represents an empty element
+  const queryWithEmpty: KVQuery = ["users", {}, "profile"];
+  const queryWithRangeAndEmpty: KVQuery = ["data", { from: 10, to: 20 }, {}];
+
+  const parsedKey = KVKeyInstance.parse("users..profile", true);
+  assertEquals(parsedKey, queryWithEmpty);
+
+  const queryInstance = new KVKeyInstance(queryWithRangeAndEmpty, true);
+  assertEquals(queryInstance.stringify(), "data.>=#10<=#20.");
+
+  const parsedQuery = KVKeyInstance.parse("data.>=#10<=#20.", true);
+  assertEquals(parsedQuery, queryWithRangeAndEmpty);
+});
+
+test("KVKeyInstance: parse with leading dots should throw", () => {
+  assertThrows(
+    () => KVKeyInstance.parse(`.data.>=a<=z`, false),
+    TypeError,
+    "Ranges are not allowed in keys.",
+  );
+});
+
+test("KVKeyInstance: stringify and parse mixed-type keys", () => {
+  const mixedKey: KVKey = ["users", 123, "profile"];
+  const instance = new KVKeyInstance(mixedKey);
+
+  const stringified = instance.stringify();
+  assertEquals(stringified, "users.#123.profile");
+
+  const parsed = KVKeyInstance.parse(stringified, false);
+  assertEquals(parsed, mixedKey);
+});
+
+test("KVKeyInstance: toUint8Array and fromUint8Array roundtrip", () => {
+  const key: KVKey = ["users", "john_doe", 42];
+  const instance = new KVKeyInstance(key);
+  const uint8Array = instance.toUint8Array();
+
+  const dataView = new DataView(uint8Array.buffer);
+  const newKeyInstance = new KVKeyInstance(dataView);
+
+  assertEquals(newKeyInstance.get(), key);
+});

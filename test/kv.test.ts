@@ -427,7 +427,7 @@ test("KV: watch functionality - basic matching", async () => {
   });
 
   await kvStore.set(watchedKey, { name: "Alice", age: 30 });
-  await kvStore.sync(true); // Manual sync to trigger the watch callback
+  await kvStore.sync();
 
   assertEquals(receivedTransaction!.key, watchedKey);
   assertEquals(receivedTransaction!.data, { name: "Alice", age: 30 });
@@ -451,7 +451,7 @@ test("KV: watch functionality - recursive matching", async () => {
   await kvStore.set(["users", "user1"], "Alice");
   await kvStore.set(["users", "user2"], "Bob");
   await kvStore.set(["data", "other"], "Not watched");
-  await kvStore.sync(true); // Not needed, but trigger to ensure no duplicate calls occurr
+  await kvStore.sync();
 
   assertEquals(receivedTransactions.length, 2);
   assertEquals(receivedTransactions[0].data, "Alice");
@@ -537,7 +537,7 @@ test("KV: watch functionality - no match", async () => {
 
   // Add data under a different key
   await kvStore.set(["data", "something"], "else");
-  await kvStore.sync(true);
+  await kvStore.sync();
 
   assertEquals(callbackCalled, false, "Callback should not have been called");
 
