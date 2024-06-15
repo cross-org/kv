@@ -1,3 +1,8 @@
+## 0.16.2
+
+- Fix for Node.js; use `readline` instead of prompt.
+-
+
 ## 0.16.1
 
 - Fix for Node.js not treating subarrays of buffers as expected

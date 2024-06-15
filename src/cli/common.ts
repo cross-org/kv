@@ -34,9 +34,6 @@ export function hasParameter(p: string[], n: number): boolean {
     return true;
   }
 }
-export function userInput(t: string): string {
-  return prompt(t) || "";
-}
 export function toHexString(bytes: number): string {
   // Ensure the input is a valid number
   if (typeof bytes !== "number" || isNaN(bytes)) {

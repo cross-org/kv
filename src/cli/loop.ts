@@ -1,4 +1,6 @@
 import { Colors } from "@cross/utils";
+import { CurrentRuntime, Runtime } from "@cross/runtime";
+import { createInterface } from "node:readline";
 
 import type { KVCliHandler, KVDBContainer } from "./common.ts";
 
@@ -16,7 +18,23 @@ export async function main() {
   let exit = false;
   while (!exit) {
     // Collect user input
-    const command = await prompt(Colors.blue(">"));
+    let command;
+    if (CurrentRuntime === Runtime.Node) {
+      const rl = createInterface({
+        // @ts-ignore Cross-runtime
+        input: process.stdin,
+        // @ts-ignore Cross-runtime
+        output: process.stdout,
+      });
+      command = await new Promise((resolve) => {
+        rl.question(Colors.blue("> "), (cmd: unknown) => {
+          rl.close();
+          resolve(cmd);
+        });
+      });
+    } else {
+      command = await prompt(Colors.blue(">"));
+    }
     if (command === null) {
       continue;
     }
