@@ -1,3 +1,16 @@
+## 0.16.0
+
+**Breaking change, databases created using earlier versions is not compatible with 0.16.0 and up.**
+
+- Use 32 bit MurmurHash3 (from new dependency `npm:ohash` instead of SHA-1 for transaction integrity check,
+  saving time and storage
+- Precalculate the Uint32Array of the transaction signature, improving
+  performance
+- Use CBOR-encoding of key instead of custom implementation, improving
+  performance
+- Avoid copying arraybuffers in certain situations
+- Prefetch data on transaction read, severely reducing the number of disk reads
+
 ## 0.15.11
 
 - Remove option doLock from `.sync()`

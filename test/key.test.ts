@@ -302,8 +302,7 @@ test("KVKeyInstance: toUint8Array and fromUint8Array roundtrip", () => {
   const instance = new KVKeyInstance(key);
   const uint8Array = instance.toUint8Array();
 
-  const dataView = new DataView(uint8Array.buffer);
-  const newKeyInstance = new KVKeyInstance(dataView);
+  const newKeyInstance = new KVKeyInstance(uint8Array);
 
   assertEquals(newKeyInstance.get(), key);
 });

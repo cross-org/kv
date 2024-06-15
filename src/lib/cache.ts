@@ -2,7 +2,7 @@ import { LEDGER_CACHE_MEMORY_FACTOR } from "./constants.ts";
 import type { KVLedgerResult } from "./ledger.ts";
 
 /**
- * An in-memory cache for `KVLedgerResult` objects, optimized for append-only ledgers.
+ * An in-memory cache for `KVLedgerResult` objects.
  *
  * This cache stores transaction results (`KVLedgerResult`) associated with their offsets within the ledger.
  * It maintains a fixed maximum size and evicts the oldest entries (Least Recently Used - LRU)

@@ -6,6 +6,7 @@ import {
   writeAtPosition,
 } from "./utils/file.ts";
 import {
+  ENCODED_TRANSACTION_SIGNATURE,
   LEDGER_BASE_OFFSET,
   LEDGER_CURRENT_VERSION,
   LEDGER_FILE_ID,
@@ -14,9 +15,9 @@ import {
   LOCK_DEFAULT_INITIAL_RETRY_INTERVAL_MS,
   LOCK_DEFAULT_MAX_RETRIES,
   LOCK_STALE_TIMEOUT_MS,
+  LOCKED_BYTES,
   LOCKED_BYTES_LENGTH,
   SUPPORTED_LEDGER_VERSIONS,
-  TRANSACTION_SIGNATURE,
   UNLOCKED_BYTES,
 } from "./constants.ts";
 import { KVOperation, KVTransaction } from "./transaction.ts";
@@ -24,6 +25,7 @@ import { rename, unlink } from "@cross/fs";
 import type { FileHandle } from "node:fs/promises";
 import type { KVQuery } from "./key.ts";
 import { KVLedgerCache } from "./cache.ts";
+import { KVPrefetcher } from "./prefetcher.ts";
 
 /**
  * This file handles the ledger file, which is where all persisted data of an cross/kv instance is stored.
@@ -60,8 +62,11 @@ export class KVLedger {
   private opened: boolean = false;
   private dataPath: string;
 
-  // Cache
+  // Cache for decoded transactions
   public cache: KVLedgerCache;
+
+  // Rolling pre-fetch cache for raw transaction data
+  public prefetch: KVPrefetcher;
 
   public header: KVLedgerHeader = {
     fileId: LEDGER_FILE_ID,
@@ -73,6 +78,7 @@ export class KVLedger {
   constructor(filePath: string, maxCacheSizeMBytes: number) {
     this.dataPath = toNormalizedAbsolutePath(filePath);
     this.cache = new KVLedgerCache(maxCacheSizeMBytes * 1024 * 1024);
+    this.prefetch = new KVPrefetcher();
   }
 
   /**
@@ -146,6 +152,7 @@ export class KVLedger {
             currentOffset += result.length; // Advance the offset
             failures = 0;
           } catch (_e) {
+            console.error(_e);
             failures++;
           }
         }
@@ -221,6 +228,7 @@ export class KVLedger {
 
     try {
       reusableFd = await rawOpen(this.dataPath, false); // Keep file open during scan
+
       while (currentOffset < this.header.currentOffset) {
         // Allow getting partial results (2nd parameter false) to re-use ledger cache to the maximum
         const result = await this.rawGetTransaction(
@@ -261,12 +269,14 @@ export class KVLedger {
       // Encode fileId
       new TextEncoder().encodeInto(
         this.header.fileId,
+        // - Creates a uint8 view into the existing ArrayBuffer
         new Uint8Array(headerBuffer, 0, 4),
       );
 
       // Encode ledgerVersion
       new TextEncoder().encodeInto(
         this.header.ledgerVersion,
+        // - Creates a uint8 view into the existing ArrayBuffer
         new Uint8Array(headerBuffer, 4, 4),
       );
 
@@ -326,30 +336,30 @@ export class KVLedger {
     externalFd?: Deno.FsFile | FileHandle,
   ): Promise<KVLedgerResult> {
     this.ensureOpen();
-
     // Check cache first
     const cachedResult = this.cache.getTransactionData(baseOffset);
     if (cachedResult && (!readData || cachedResult.complete)) {
       return cachedResult;
     }
-
     let fd = externalFd;
     try {
       if (!externalFd) fd = await rawOpen(this.dataPath, false);
 
       // Fetch 2 + 4 + 4 bytes (signature, header length, data length)
-      const transactionLengthData = await readAtPosition(
+      const baseData = await this.prefetch.read(
         fd!,
-        TRANSACTION_SIGNATURE.length + 4 + 4,
+        ENCODED_TRANSACTION_SIGNATURE.length + 4 + 4,
         baseOffset,
       );
       const transactionLengthDataView = new DataView(
-        transactionLengthData.buffer,
+        baseData.buffer,
+        0,
+        ENCODED_TRANSACTION_SIGNATURE.length + 4 + 4,
       );
 
       let headerOffset = 0;
 
-      headerOffset += TRANSACTION_SIGNATURE.length;
+      headerOffset += ENCODED_TRANSACTION_SIGNATURE.length;
 
       // Read header length (offset by 4 bytes for header length uint32)
       const headerLength = transactionLengthDataView.getUint32(
@@ -366,9 +376,8 @@ export class KVLedger {
       headerOffset += 4;
 
       const transaction = new KVTransaction();
-
       // Read transaction header
-      const transactionHeaderData = await readAtPosition(
+      const transactionHeaderData = await this.prefetch.read(
         fd!,
         headerLength,
         baseOffset + headerOffset,
@@ -378,14 +387,13 @@ export class KVLedger {
       // Read transaction data (optional)
       const complete = readData || !(dataLength > 0);
       if (readData && dataLength > 0) {
-        const transactionData = await readAtPosition(
+        const transactionData = await this.prefetch.read(
           fd!,
           dataLength,
           baseOffset + headerOffset + headerLength,
         );
-        await transaction.dataFromUint8Array(transactionData);
+        transaction.dataFromUint8Array(transactionData);
       }
-
       // Get transaction result
       const result = {
         offset: baseOffset,
@@ -396,7 +404,6 @@ export class KVLedger {
 
       // Cache transaction
       this.cache.cacheTransactionData(baseOffset, result);
-
       return result;
     } finally {
       if (fd && !externalFd) fd.close();
@@ -465,8 +472,9 @@ export class KVLedger {
       }
       this.header.currentOffset = tempLedger.header.currentOffset;
 
-      // 6. Clear cache
+      // 6. Clear cache and prefetch
       this.cache.clear();
+      this.prefetch.clear();
 
       // 7. Replace Original File
       // - The lock flag is now set independently, no need to unlock from this point on
@@ -521,7 +529,7 @@ export class KVLedger {
         }
 
         // 2. Prepare lock data
-        const lockBytes = new Uint8Array(LOCKED_BYTES_LENGTH);
+        const lockBytes = LOCKED_BYTES;
         const lockView = new DataView(lockBytes.buffer);
         lockView.setBigUint64(0, BigInt(Date.now()), false);
 

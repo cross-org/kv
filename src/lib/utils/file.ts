@@ -1,4 +1,9 @@
-import { type FileHandle, open, writeFile } from "node:fs/promises";
+import {
+  type FileHandle,
+  type FileReadResult,
+  open,
+  writeFile,
+} from "node:fs/promises";
 import { CurrentRuntime, Runtime } from "@cross/runtime";
 import { cwd, isDir, isFile, mkdir } from "@cross/fs";
 import { dirname, isAbsolute, join, resolve } from "@std/path";
@@ -57,15 +62,21 @@ export async function readAtPosition(
   if (CurrentRuntime === Runtime.Deno) {
     await (fd as Deno.FsFile).seek(position, Deno.SeekMode.Start);
     const buffer = new Uint8Array(length);
-    await fd.read(buffer);
-    return buffer;
-
+    const bytesRead = await (fd as Deno.FsFile).read(buffer);
+    return buffer.subarray(0, bytesRead ?? 0);
     // Node or Bun
   } else {
     // @ts-ignore cross-runtime
     const buffer = Buffer.alloc(length);
-    await fd.read(buffer, 0, length, position);
-    return buffer;
+    const readResult = await fd.read(
+      buffer,
+      0,
+      length,
+      position,
+      // deno-lint-ignore no-explicit-any
+    ) as FileReadResult<any>;
+    const bytesRead = readResult.bytesRead as number;
+    return buffer.subarray(0, bytesRead);
   }
 }
 

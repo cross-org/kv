@@ -159,7 +159,7 @@ export class KV extends EventEmitter {
         "Invalid option: syncIntervalMs must be a positive integer",
       );
     }
-    this.syncIntervalMs = options.syncIntervalMs ?? SYNC_INTERVAL_MS;
+    this.syncIntervalMs = options.syncIntervalMs ?? this.syncIntervalMs;
     // - ledgerCacheSize
     if (
       options.ledgerCacheSize !== undefined &&
@@ -209,9 +209,9 @@ export class KV extends EventEmitter {
     this.ledger = new KVLedger(filePath, this.ledgerCacheSize);
     this.ledgerPath = filePath;
     await this.ledger.open(createIfMissing);
-
     // Do the initial synchronization
     // - If `this.autoSync` is enabled, additional synchronizations will be carried out every `this.syncIntervalMs`
+
     const syncResult = await this.sync();
     if (syncResult.error) {
       throw syncResult.error;
@@ -747,8 +747,12 @@ export class KV extends EventEmitter {
     this.ensureOpen();
     this.ensureIndex();
 
+    const validatedQuery: KVKeyInstance | null = key === null
+      ? null
+      : new KVKeyInstance(key, true);
+
     return this.index.getChildKeys(
-      key === null ? null : new KVKeyInstance(key, true),
+      key === null ? null : validatedQuery,
     );
   }
 

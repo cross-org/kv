@@ -1,3 +1,4 @@
+import { decode, encode } from "cbor-x";
 import { KV_KEY_ALLOWED_CHARS } from "./constants.ts";
 
 // Helper function to stringify range values correctly
@@ -68,11 +69,11 @@ export class KVKeyInstance {
   private isQuery: boolean;
   public byteLength?: number;
   constructor(
-    key: KVQuery | KVKey | DataView,
+    key: KVQuery | KVKey | Uint8Array,
     isQuery: boolean = false,
     validate: boolean = true,
   ) {
-    if (key instanceof DataView) {
+    if (key instanceof Uint8Array) {
       this.key = this.fromUint8Array(key);
     } else {
       this.key = key;
@@ -87,48 +88,8 @@ export class KVKeyInstance {
    * Encodes the key elements into a byte array suitable for storage in a transaction header.
    */
   public toUint8Array(): Uint8Array {
-    const keyBytesArray = [];
-    for (const element of this.key) {
-      if (typeof element === "string") {
-        keyBytesArray.push(new Uint8Array([0])); // Type: String
-        const strBytes = new TextEncoder().encode(element);
-        const strLengthBytes = new Uint8Array(4);
-        new DataView(strLengthBytes.buffer).setUint32(
-          0,
-          strBytes.length,
-          false,
-        );
-        keyBytesArray.push(strLengthBytes);
-        keyBytesArray.push(strBytes);
-      } else if (typeof element === "number") {
-        keyBytesArray.push(new Uint8Array([1])); // Type: Number
-        const numBytes = new Uint8Array(8);
-        new DataView(numBytes.buffer).setFloat64(0, element, false);
-        keyBytesArray.push(numBytes);
-      } else {
-        // This should never happen if validate() is working correctly
-        throw new TypeError("Invalid key element type");
-      }
-    }
-
-    // Encode the number of key elements
-    const numKeyElementsBytes = new Uint8Array(1);
-    new DataView(numKeyElementsBytes.buffer).setUint8(
-      0,
-      this.key.length,
-    );
-    keyBytesArray.unshift(numKeyElementsBytes); // Add to the beginning
-
-    const keyArray = new Uint8Array(
-      keyBytesArray.reduce((a, b) => a + b.length, 0),
-    );
-    let keyOffset = 0;
-    for (const bytes of keyBytesArray) {
-      keyArray.set(bytes, keyOffset);
-      keyOffset += bytes.length;
-    }
-
-    return keyArray;
+    const data = encode(this.key);
+    return new Uint8Array(data, 0, data.byteLength);
   }
 
   /**
@@ -137,44 +98,9 @@ export class KVKeyInstance {
    * @param data - The byte array containing the encoded key.
    * @throws {Error} If the key cannot be decoded.
    */
-  private fromUint8Array(dataView: DataView): KVKey {
-    let offset = 0;
-
-    // 1. Decode Number of Key Elements (uint32)
-    const numKeyElements = dataView.getUint8(offset);
-    offset += 1;
-
-    const keyToBe: KVKey = [];
-
-    for (let i = 0; i < numKeyElements; i++) {
-      // 2. Decode Element Type (uint8): 0 for string, 1 for number
-      const elementType = dataView.getUint8(offset);
-      offset += 1;
-
-      if (elementType === 0) { // String
-        // 3a. Decode String Length (uint32)
-        const strLength = dataView.getUint32(offset, false);
-        offset += 4;
-
-        // 3b. Decode String Bytes
-        const strBytes = new DataView(
-          dataView.buffer,
-          dataView.byteOffset + offset,
-          strLength,
-        );
-        keyToBe.push(new TextDecoder().decode(strBytes));
-        offset += strLength;
-      } else if (elementType === 1) { // Number
-        // 3c. Decode Number (float64)
-        const numValue = dataView.getFloat64(offset, false);
-        keyToBe.push(numValue);
-        offset += 8;
-      } else {
-        throw new Error(`Invalid key element type ${elementType}`);
-      }
-    }
-    this.byteLength = offset;
-    return keyToBe;
+  private fromUint8Array(data: Uint8Array): KVKey {
+    this.key = decode(data);
+    return this.key as KVKey;
   }
 
   get(): KVQuery | KVKey {
@@ -301,7 +227,7 @@ export class KVKeyInstance {
       }
     }
 
-    const instance = new KVKeyInstance(result, isQuery);
+    const instance = new KVKeyInstance(result, isQuery, false);
     instance.validate();
 
     return isQuery ? result : result as KVKey;
@@ -380,7 +306,10 @@ export class KVKeyInstance {
         const subquery = query.slice(i + 1);
         const subkey = thisKey.slice(i + 1);
         if (
-          !new KVKeyInstance(subkey, true).matchesQuery(subquery, recursive)
+          !new KVKeyInstance(subkey, true, false).matchesQuery(
+            subquery,
+            recursive,
+          )
         ) {
           return false;
         }

@@ -1,7 +1,8 @@
-import { compareHash, sha1 } from "./utils/hash.ts";
+//import { compareHash, sha1 } from "./utils/hash.ts";
 import { type KVKey, KVKeyInstance } from "./key.ts";
 import { decode, encode } from "cbor-x";
-import { TRANSACTION_SIGNATURE } from "./constants.ts";
+import { ENCODED_TRANSACTION_SIGNATURE } from "./constants.ts";
+import { murmurHash } from "ohash";
 
 /**
  * Data structure of a Cross/kv transaction:
@@ -16,22 +17,14 @@ import { TRANSACTION_SIGNATURE } from "./constants.ts";
  *
  * Header Bytes Structure:
  *
- * | Key Data... | Operation (uint8) | Timestamp (uint32) | Hash Length (uint32) | Hash Bytes... |
- *
+ * Key Length (uint32) | Key Data... | Operation (uint8) | Timestamp (uint32) | Hash Length (uint32) | Hash Bytes... |
+
+ * - Key Length: The length of the key in bytes.
  * - Key Data: Data returned by the key
  * - Operation: The type of operation (SET or DELETE).
  * - Timestamp: The timestamp of the operation.
- * - Hash Length: The length of the hash in bytes.
- * - Hash Bytes: The hash of the data (optional).
- *
- * Key Element Structure (repeated for each key element):
- *
- * | Element Type (uint8) | Element Data... |
- *
- * - Element Type: 0 for string, 1 for number.
- * - String Element Data: String Length (uint32) | String Bytes...
- * - Number Element Data: Number Value (float64)
- */
+ * - Hash Length: The hash (32 bit positive integer).
+ **/
 
 /**
  * Enumerates the possible operations that can be performed on a key-value pair in the KV store.
@@ -104,7 +97,7 @@ export interface KVTransactionResult<T> {
    * The hash of the raw transaction data. This can be used for
    * verification and integrity checks.
    */
-  hash: Uint8Array | null;
+  hash: number | null;
 }
 
 // Concrete implementation of the KVTransaction interface
@@ -113,11 +106,11 @@ export class KVTransaction {
   public operation?: KVOperation;
   public timestamp?: number;
   public data?: Uint8Array;
-  public hash?: Uint8Array;
+  public hash?: number;
   constructor() {
   }
 
-  public async create(
+  public create(
     key: KVKeyInstance,
     operation: KVOperation,
     timestamp: number,
@@ -127,15 +120,13 @@ export class KVTransaction {
     if (this.operation === KVOperation.SET && value === undefined) {
       throw new Error("Set operation needs data");
     }
-
-    // Assign
     this.key = key;
     this.operation = operation;
     this.timestamp = timestamp;
-    if (value) {
+    if (operation !== KVOperation.DELETE && value) {
       const valueData = new Uint8Array(encode(value));
       this.data = valueData;
-      this.hash = await sha1(valueData);
+      this.hash = murmurHash(valueData);
     }
   }
 
@@ -150,11 +141,25 @@ export class KVTransaction {
     );
     let offset = 0;
 
-    // Decode key
-    this.key = new KVKeyInstance(dataView, false, false);
-    offset += this.key.byteLength!;
+    // Decode key length
+    const keyLength = dataView.getUint32(offset, false);
+    offset += 4;
 
-    // Decode operation (assuming it's encoded as uint8)
+    // Decode key
+    // - Create a view into the original buffer
+    const keyView = new Uint8Array(
+      data.buffer,
+      data.byteOffset + offset,
+      keyLength,
+    );
+    this.key = new KVKeyInstance(
+      keyView,
+      false,
+      false,
+    );
+    offset += keyLength;
+
+    // Decode operation
     this.operation = dataView.getUint8(offset);
     offset += 1;
 
@@ -162,18 +167,11 @@ export class KVTransaction {
     this.timestamp = dataView.getFloat64(offset, false);
     offset += 8;
 
-    // Decode hash length (assuming it's encoded as uint32)
-    const hashLength = dataView.getUint32(offset, false);
-    offset += 4;
-
     // Decode hash bytes
     if (readHash) {
-      this.hash = data.slice(
-        offset,
-        offset + hashLength,
-      );
+      this.hash = dataView.getUint32(offset, false);
     }
-    offset += hashLength;
+    offset += 4;
 
     // Do not allow extra data
     if (offset !== data.byteLength) {
@@ -181,8 +179,8 @@ export class KVTransaction {
     }
   }
 
-  public async dataFromUint8Array(data: Uint8Array) {
-    if (!compareHash(await sha1(data), this.hash!)) {
+  public dataFromUint8Array(data: Uint8Array) {
+    if (murmurHash(data) !== this.hash!) {
       throw new Error("Invalid data: Read data not matching hash");
     }
     this.data = data;
@@ -197,11 +195,12 @@ export class KVTransaction {
     const pendingTransactionData = this.data;
 
     // Calculate total sizes
-    const headerSize = keyBytes.length + 1 + 8 + 4 + (hashBytes?.length ?? 0);
+    const headerSize = 4 + keyBytes.length + 1 + 8 + 4;
     const dataLength = pendingTransactionData
       ? pendingTransactionData.length
       : 0;
-    const fullDataSize = TRANSACTION_SIGNATURE.length + 4 + 4 + headerSize +
+    const fullDataSize = ENCODED_TRANSACTION_SIGNATURE.length + 4 + 4 +
+      headerSize +
       dataLength;
 
     const fullData = new Uint8Array(fullDataSize);
@@ -210,15 +209,18 @@ export class KVTransaction {
     let offset = 0;
 
     // Encode transaction signature
-    const signature = new TextEncoder().encode(TRANSACTION_SIGNATURE);
-    fullData.set(signature, 0);
-    offset += TRANSACTION_SIGNATURE.length;
+    fullData.set(ENCODED_TRANSACTION_SIGNATURE, 0);
+    offset += ENCODED_TRANSACTION_SIGNATURE.length;
 
     // Encode header and data lengths
     fullDataView.setUint32(offset, headerSize, false);
     offset += 4;
 
     fullDataView.setUint32(offset, dataLength, false);
+    offset += 4;
+
+    // Encode key length
+    fullDataView.setUint32(offset, keyBytes.length, false);
     offset += 4;
 
     // Encode key bytes
@@ -229,12 +231,8 @@ export class KVTransaction {
     fullDataView.setUint8(offset++, this.operation!);
     fullDataView.setFloat64(offset, this.timestamp!, false);
     offset += 8;
-    fullDataView.setUint32(offset, hashBytes?.length ?? 0, false);
+    fullDataView.setUint32(offset, hashBytes ?? 0, false);
     offset += 4;
-    if (hashBytes) {
-      fullData.set(hashBytes, offset);
-      offset += hashBytes.length;
-    }
 
     // Encode data (if present)
     if (pendingTransactionData) {
@@ -245,12 +243,7 @@ export class KVTransaction {
   }
 
   private getData<T>(): T | null {
-    // Return data, should be validated through create or fromUint8Array
-    if (this.data) {
-      return decode(this.data);
-    } else {
-      return null;
-    }
+    return this.data ? decode(this.data) : null;
   }
 
   /**
