@@ -1,3 +1,7 @@
+## 0.16.1
+
+- Fix for Node.js not treating subarrays of buffers as expected
+
 ## 0.16.0
 
 **Breaking change, databases created using earlier versions is not compatible

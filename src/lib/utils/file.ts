@@ -73,10 +73,9 @@ export async function readAtPosition(
       0,
       length,
       position,
-      // deno-lint-ignore no-explicit-any
-    ) as FileReadResult<any>;
+    ) as FileReadResult<Uint8Array>;
     const bytesRead = readResult.bytesRead as number;
-    return buffer.subarray(0, bytesRead);
+    return new Uint8Array(buffer.buffer, 0, bytesRead);
   }
 }
 
