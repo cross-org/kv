@@ -37,10 +37,20 @@ export function hasParameter(p: string[], n: number): boolean {
 export function userInput(t: string): string {
   return prompt(t) || "";
 }
-export function toHexString(bytes: Uint8Array): string {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
-    "",
-  );
+export function toHexString(bytes: number): string {
+  // Ensure the input is a valid number
+  if (typeof bytes !== "number" || isNaN(bytes)) {
+    throw new Error("Input must be a valid number");
+  }
+
+  // Convert the number to an unsigned 32-bit integer
+  const unsignedNumber = bytes >>> 0;
+
+  // Use toString(16) for hexadecimal conversion
+  const hexString = unsignedNumber.toString(16);
+
+  // Pad with zeros if needed
+  return hexString.padStart(2, "0");
 }
 export function printTransaction(
   transaction: KVTransactionResult<unknown>,
