@@ -35,7 +35,7 @@ export async function main() {
     } else {
       command = await prompt(Colors.blue(">"));
     }
-    if (command === null) {
+    if (command === null || command === undefined) {
       continue;
     }
 
