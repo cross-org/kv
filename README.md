@@ -136,6 +136,8 @@ deno install -frA --name ckv jsr:@cross/kv/cli
   - `on(eventName, eventData)` - Subscribes to events like `sync`,
     `watchdogError`, or `closing` to get notified of specific occurrences.
   - `isOpen()` - Returns true if the database is open and ready for operations.
+  - `defer(promiseToHandle, [errorHandler], [timeoutMs])` - Defers the
+    resolution or rejection of a Promise until `.close()`
   - `async close()` - Closes the KV store, ensuring resources are released.
 
 ### Keys

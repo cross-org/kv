@@ -48,8 +48,7 @@ export async function rawOpen(
   if (CurrentRuntime === Runtime.Deno) {
     return await Deno.open(filename, { read: true, write: write });
   } else {
-    const mode = write ? "r+" : "r";
-    return await open(filename, mode);
+    return await open(filename, write ? "r+" : "r");
   }
 }
 
@@ -58,25 +57,23 @@ export async function readAtPosition(
   length: number,
   position: number,
 ): Promise<Uint8Array> {
+  const buffer = new Uint8Array(length);
+  let bytesRead: number | null;
   // Deno
   if (CurrentRuntime === Runtime.Deno) {
     await (fd as Deno.FsFile).seek(position, Deno.SeekMode.Start);
-    const buffer = new Uint8Array(length);
-    const bytesRead = await (fd as Deno.FsFile).read(buffer);
-    return buffer.subarray(0, bytesRead ?? 0);
+    bytesRead = await (fd as Deno.FsFile).read(buffer);
     // Node or Bun
   } else {
-    // @ts-ignore cross-runtime
-    const buffer = Buffer.alloc(length);
     const readResult = await fd.read(
       buffer,
       0,
       length,
       position,
     ) as FileReadResult<Uint8Array>;
-    const bytesRead = readResult.bytesRead as number;
-    return new Uint8Array(buffer.buffer, 0, bytesRead);
+    bytesRead = readResult.bytesRead;
   }
+  return new Uint8Array(buffer.buffer, 0, bytesRead ?? 0);
 }
 
 /**

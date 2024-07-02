@@ -1,7 +1,18 @@
+## 0.16.3
+
+- Added `KV.defer(promiseToHandle, [errorHandler], [timeoutMs])` method to allow
+  non-awaited promises to be tracked and settled during `KV.close()`.
+  - `errorHandler` (optional): A function to handle errors that occur during
+    promise resolution/rejection. If not provided, errors will silently ignored.
+  - `timeoutMs` (optional): A timeout (in milliseconds) for promise resolution.
+    If the promise doesn't settle within this time during `KV.close()`, a
+    warning will be logged. Defaults to 5000ms.
+- Fix cli tool not being able to open any database after a failed open
+- Code refactors
+
 ## 0.16.2
 
-- Fix for Node.js; use `readline` instead of prompt.
--
+- Fix for Node.js; use `readline` instead of prompt
 
 ## 0.16.1
 

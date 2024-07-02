@@ -36,6 +36,7 @@ export async function open(
     await container.db.open(dbPath, true);
     return true;
   } catch (e) {
+    container.db = undefined;
     console.error(`Could not open database: ${e.message}`);
     return false;
   }

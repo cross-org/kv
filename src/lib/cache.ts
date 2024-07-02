@@ -6,7 +6,7 @@ import type { KVLedgerResult } from "./ledger.ts";
  *
  * This cache stores transaction results (`KVLedgerResult`) associated with their offsets within the ledger.
  * It maintains a fixed maximum size and evicts the oldest entries (Least Recently Used - LRU)
- * when the cache becomes full.  Since the ledger is append-only, expiration is not necessary.
+ * when the cache becomes full.
  *
  * Note: The `cacheSizeBytes` property is an approximation of the cache's size and represents
  *       the encoded size of the transaction data on disk, not the actual memory usage of the cached objects.

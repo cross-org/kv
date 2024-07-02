@@ -131,6 +131,8 @@ export class KV extends EventEmitter {
   private isInTransaction: boolean = false;
   private watchdogTimer?: number; // Undefined if not scheduled or currently running
   private watchdogPromise?: Promise<void>;
+  /** Used through .deferCompletion to make .close await the action */
+  private promiseWatchlist: Promise<unknown>[];
 
   /**
    * Initializes a new instance of the cross/kv main class `KV`.
@@ -141,6 +143,8 @@ export class KV extends EventEmitter {
    */
   constructor(options: KVOptions = {}) {
     super();
+
+    this.promiseWatchlist = [];
 
     // Validate and set options
     // - autoSync
@@ -184,6 +188,54 @@ export class KV extends EventEmitter {
       this.watchdogPromise = this.watchdog();
     }
   }
+
+  /**
+   * Defers the resolution or rejection of a Promise until the `.close()` method is called.
+   *
+   * This function adds the provided promise to a `promiseWatchlist`.  During the `close()` method, the database
+   * will wait for all promises in the watchlist to settle (resolve or reject) before finalizing the closure.
+   * If an `errorHandler` function is provided, it will be called with any errors that occur during the promise's
+   * execution. Otherwise, errors will be silently ignored.
+   *
+   * @param promiseToHandle - The Promise whose resolution or rejection is to be deferred.
+   * @param errorHandler   - An optional function to handle errors that occur during the promise's execution.
+   * @returns The original promise, allowing for chaining.
+   */
+  public defer(
+    promiseToHandle: Promise<unknown>,
+    errorHandler?: (error: unknown) => void,
+  ): Promise<unknown> {
+    this.promiseWatchlist.push(promiseToHandle);
+
+    promiseToHandle.finally(() => {
+      this.removePromiseFromWatchlist(promiseToHandle);
+    }).catch((error) => {
+      if (errorHandler) {
+        errorHandler(error); // Call the custom error handler
+      } else {
+        /** Silently ignore */
+      }
+      this.removePromiseFromWatchlist(promiseToHandle);
+    });
+
+    return promiseToHandle;
+  }
+
+  /**
+   * Removes a Promise from the `promiseWatchlist`.
+   *
+   * This function is used internally to clean up the watchlist after a promise has been settled (resolved or rejected).
+   * It ensures that only pending promises remain in the watchlist.
+   *
+   * @param promiseToRemove - The Promise to remove from the watchlist.
+   */
+  private removePromiseFromWatchlist(promiseToRemove: Promise<unknown>) {
+    const index = this.promiseWatchlist.indexOf(promiseToRemove);
+    if (index > -1) {
+      this.promiseWatchlist.splice(index, 1);
+    }
+  }
+
   /**
    * Opens the Key-Value store based on a provided file path.
    * Initializes the index and data files.
@@ -795,31 +847,65 @@ export class KV extends EventEmitter {
   }
 
   /**
-   * Closes the database gracefully.
+   * Closes the database gracefully, awaiting pending promises and optionally applying a timeout.
    *
-   * 1. Waits for any ongoing watchdog task to complete.
-   * 2. Emits a 'closing' event to notify listeners.
-   * 3. Closes the associated ledger.
+   * 1. Awaits all deferred promises in the `promiseWatchlist`.
+   * 2. Waits for any ongoing watchdog task to complete.
+   * 3. Emits a 'closing' event to notify listeners.
+   * 4. Closes the associated ledger.
+   *
+   * @param timeoutMs (optional) - The maximum time in milliseconds to wait for promises to resolve before closing. Defaults to 5000ms.
    */
-  public async close() {
+  public async close(timeoutMs = 5000) { // Default timeout of 5 seconds
     // @ts-ignore emit exists
     this.emit("closing");
 
     // Used to stop any pending watchdog runs
     this.aborted = true;
 
-    // Await running watchdog
-    await this.watchdogPromise;
+    try {
+      // Create a timeout promise
+      let promiseTimeout;
+      const timeoutPromise = new Promise((_, reject) => {
+        promiseTimeout = setTimeout(
+          () => reject(new Error("Database close timeout")),
+          timeoutMs,
+        );
+      });
 
-    // Abort any watchdog timer
-    clearTimeout(this.watchdogTimer!);
+      // Race to see if promises settle before the timeout
+      await Promise.race([
+        Promise.allSettled(this.promiseWatchlist),
+        timeoutPromise,
+      ]);
 
-    // Clear all local variables to avoid problems with unexpected usage after closing
-    this.ledgerPath = undefined;
-    this.ledger = undefined;
-    this.index = new KVIndex();
-    this.pendingTransactions = [];
-    this.watchHandlers = [];
+      // Clear the promise timeout on success
+      clearTimeout(promiseTimeout);
+
+      // Await running watchdog if it hasn't been aborted
+      if (this.watchdogPromise) {
+        await this.watchdogPromise;
+      }
+    } catch (error) {
+      if (error.message === "Database close timeout") {
+        console.warn(
+          "Database close timed out. Some promises may not have resolved:",
+          this.promiseWatchlist,
+        );
+      } else {
+        console.error("Error during database close:", error);
+      }
+    } finally {
+      // Clear watchdog timer regardless of errors
+      clearTimeout(this.watchdogTimer!);
+
+      // Reset internal state
+      this.ledgerPath = undefined;
+      this.ledger = undefined;
+      this.index = new KVIndex();
+      this.pendingTransactions = [];
+      this.watchHandlers = [];
+    }
   }
 
   /**

@@ -11,6 +11,7 @@ import {
   LEDGER_CURRENT_VERSION,
   LEDGER_FILE_ID,
   LEDGER_MAX_READ_FAILURES,
+  LEDGER_PREFETCH_BYTES,
   LOCK_BYTE_OFFSET,
   LOCK_DEFAULT_INITIAL_RETRY_INTERVAL_MS,
   LOCK_DEFAULT_MAX_RETRIES,
@@ -78,7 +79,7 @@ export class KVLedger {
   constructor(filePath: string, maxCacheSizeMBytes: number) {
     this.dataPath = toNormalizedAbsolutePath(filePath);
     this.cache = new KVLedgerCache(maxCacheSizeMBytes * 1024 * 1024);
-    this.prefetch = new KVPrefetcher();
+    this.prefetch = new KVPrefetcher(LEDGER_PREFETCH_BYTES);
   }
 
   /**

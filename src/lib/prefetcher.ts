@@ -1,17 +1,31 @@
 import { readAtPosition } from "./utils/file.ts";
 import type { FileHandle } from "node:fs/promises";
-import { LEDGER_PREFETCH_BYTES } from "./constants.ts";
 
+/**
+ * Manages prefetching data from files for efficient sequential reading.
+ *
+ * This class optimizes reading by fetching chunks of data larger than the requested amount,
+ * reducing the number of file reads needed for sequential access.
+ */
 export class KVPrefetcher {
   private cache?: Uint8Array;
   private currentChunkStart: number;
   private currentChunkEnd: number;
+  private prefetchBytes: number;
 
-  constructor() {
+  constructor(prefetchBytes: number) {
     this.currentChunkStart = 0;
     this.currentChunkEnd = 0;
+    this.prefetchBytes = prefetchBytes;
   }
 
+  /**
+   * Fetches a chunk of data from the file.
+   *
+   * @param fd The file descriptor or handle.
+   * @param startPosition The position to start reading from.
+   * @param length The desired length of the chunk.
+   */
   private async fetchChunk(
     fd: Deno.FsFile | FileHandle,
     startPosition: number,
@@ -19,7 +33,7 @@ export class KVPrefetcher {
   ): Promise<void> {
     const chunk = await readAtPosition(
       fd,
-      length > LEDGER_PREFETCH_BYTES ? length : LEDGER_PREFETCH_BYTES,
+      length > this.prefetchBytes ? length : this.prefetchBytes,
       startPosition,
     );
     this.cache = chunk;
@@ -27,6 +41,15 @@ export class KVPrefetcher {
     this.currentChunkEnd = startPosition + chunk.length;
   }
 
+  /**
+   * Reads data from the file, using the cache if possible.
+   *
+   * @param fd The file descriptor or handle.
+   * @param length The amount of data to read.
+   * @param position The position to start reading from.
+   * @returns The requested data.
+   * @throws {Error} If data fetching fails.
+   */
   public async read(
     fd: Deno.FsFile | FileHandle,
     length: number,
@@ -52,6 +75,9 @@ export class KVPrefetcher {
     );
   }
 
+  /**
+   * Clears the cached data.
+   */
   public clear() {
     this.cache = undefined;
   }

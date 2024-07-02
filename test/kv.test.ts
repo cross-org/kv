@@ -871,3 +871,24 @@ test("KV Options: throws on invalid disableIndex type", () => {
     "Invalid option: disableIndex must be a boolean",
   );
 });
+
+test("KV: defer function - promise rejection is handled", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+
+  const deferredPromise = new Promise<void>((_, reject) => {
+    setTimeout(() => {
+      reject(new Error("Test error"));
+    }, 500);
+  });
+
+  const then = Date.now();
+
+  await kvStore.open(tempFilePrefix);
+
+  kvStore.defer(deferredPromise);
+
+  await kvStore.close();
+
+  assertEquals(Date.now() - then >= 500, true);
+});
