@@ -402,7 +402,7 @@ test("KV: sync event triggers and reflects data changes", async () => {
   await kvStore1.set(["user", "age"], 42);
 
   // Wait for the watchdog interval to ensure a sync occurs
-  await new Promise((resolve) => setTimeout(resolve, SYNC_INTERVAL_MS * 2)); // Autosync should have happened within 2 sec
+  await new Promise((resolve) => setTimeout(resolve, SYNC_INTERVAL_MS * 1.8)); // Autosync should have happened within 1.8 times the sync interval
 
   // Assert that the second instance has the updated data
   assertEquals(syncedData.length, 2);

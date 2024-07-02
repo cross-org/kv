@@ -18,7 +18,7 @@ export async function main() {
   let exit = false;
   while (!exit) {
     // Collect user input
-    let command;
+    let command: string | null;
     if (CurrentRuntime === Runtime.Node) {
       const rl = createInterface({
         // @ts-ignore Cross-runtime
@@ -27,7 +27,7 @@ export async function main() {
         output: process.stdout,
       });
       command = await new Promise((resolve) => {
-        rl.question(Colors.blue("> "), (cmd: unknown) => {
+        rl.question(Colors.blue("> "), (cmd: string) => {
           rl.close();
           resolve(cmd);
         });
