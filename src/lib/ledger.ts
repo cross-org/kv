@@ -461,6 +461,10 @@ export class KVLedger {
       );
       await tempLedger.open(true);
 
+      // Lock the temporary ledger to prevent multiple vacuums against the same tempfile
+      // - Will be unlocked in the finally clause
+      await tempLedger.lock();
+
       // 5. Append valid transactions to the new file.
       for (const validTransaction of validTransactions) {
         const transaction = await this.rawGetTransaction(
@@ -478,7 +482,6 @@ export class KVLedger {
       this.prefetch.clear();
 
       // 7. Replace Original File
-      // - The lock flag is now set independently, no need to unlock from this point on
       await unlink(this.dataPath);
       await rename(tempFilePath, this.dataPath);
       ledgerIsReplaced = true;

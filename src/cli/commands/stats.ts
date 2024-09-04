@@ -76,6 +76,8 @@ async function stats(
           ledgerSetCount++;
         } else if (entry.operation === KVOperation.DELETE) {
           ledgerDeleteCount++;
+        } else {
+          ledgerInvalidCount++;
         }
       }
     } catch (_e) {
@@ -89,7 +91,6 @@ async function stats(
     console.log(Colors.dim(`    Delete Ops:   `), ledgerDeleteCount);
     if (ledgerInvalidCount) {
       console.log(Colors.red(`    Invalid Ops:  `), ledgerInvalidCount);
-      console.error("    Counting aborted due to invalid operations");
     }
 
     console.log("");
