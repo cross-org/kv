@@ -16,7 +16,7 @@
     "@cross/fs": "jsr:@cross/fs@^0.1.11",
     "@cross/runtime": "jsr:@cross/runtime@^1.0.0",
     "@cross/test": "jsr:@cross/test@^0.0.9",
-    "@cross/utils": "jsr:@cross/utils@^0.14.0",
+    "@cross/utils": "jsr:@cross/utils@^0.16.0",
     "@std/assert": "jsr:@std/assert@^1.0.4",
     "@std/path": "jsr:@std/path@^1.0.4",
     "cbor-x": "npm:cbor-x@^1.5.9",
