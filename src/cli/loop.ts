@@ -55,9 +55,13 @@ export async function main() {
         `[${elapsedTime} ms]\n`,
       );
     } else if (cmd === "close") {
-      await container.db?.close();
-      console.log(Colors.yellow("Database closed.\n"));
-      container.db = undefined;
+      if (container.db) {
+        await container.db.close();
+        console.log(Colors.yellow("Database closed.\n"));
+        container.db = undefined;
+      } else {
+        console.log(Colors.yellow("No database open.\n"));
+      }
     } else if (cmd === "exit") {
       await container.db?.close();
       container.db = undefined;
