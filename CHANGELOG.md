@@ -1,3 +1,8 @@
+## 0.16.5
+
+- Makes cli tool `open` and `close` more resilient to errors.
+- Dependency update.
+
 ## 0.16.4
 
 - Refactor of file locks during a vacuum
