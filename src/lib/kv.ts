@@ -24,6 +24,14 @@ export type KVSyncResultStatus =
   | "error"; /** An error occurred during synchronization. Check the `error` property for details. */
 
 /**
+ * Represents an array of errors that occurred during a synchronizing with the on-disk ledger.
+ *
+ * Each element in the array is either an `Error` object or `null`. If an error occurred, the `Error` object will provide more details.
+ * If no errors occurred, the array will be empty.
+ */
+export type KVSyncErrors = (Error | null)[];
+
+/**
  * The result of a synchronization operation between the in-memory index and the on-disk ledger.
  */
 export interface KVSyncResult {
@@ -34,7 +42,7 @@ export interface KVSyncResult {
   /**
    * If an error occurred during synchronization, this property will contain the Error object. Otherwise, it will be null.
    */
-  error: Error | null;
+  errors: KVSyncErrors;
 }
 
 /**
@@ -242,11 +250,13 @@ export class KV extends EventEmitter {
    *
    * @param filePath - Path to the base file for the KV store. Index and data files will be derived from this path.
    * @param createIfMissing - If true, the KV store files will be created if they do not exist. Default is true.
+   * @param ignoreTransactionErrors - If true, the open operation keeps going even if encountering errors, collection all of them. Default is false.
    */
   public async open(
     filePath: string,
     createIfMissing: boolean = true,
-  ) {
+    ignoreTransactioErrors: boolean = false,
+  ): Promise<KVSyncResult> {
     // Do not allow re-opening a closed database
     if (this.aborted) {
       throw new Error("Could not open, database already closed.");
@@ -264,10 +274,11 @@ export class KV extends EventEmitter {
     // Do the initial synchronization
     // - If `this.autoSync` is enabled, additional synchronizations will be carried out every `this.syncIntervalMs`
 
-    const syncResult = await this.sync();
-    if (syncResult.error) {
-      throw syncResult.error;
+    const syncResult = await this.sync(ignoreTransactioErrors);
+    if (syncResult.errors?.length > 0 && !ignoreTransactioErrors) {
+      throw syncResult.errors[0];
     }
+    return syncResult;
   }
 
   /**
@@ -343,19 +354,23 @@ export class KV extends EventEmitter {
    * - Automatically run on adding data
    * - Can be manually triggered for full consistency before data retrieval (iterate(), listAll(), get())
    *
+   * @param ignoreTransactionErrors - If true, the sync operation keeps going even if encountering errors, collection all of them. Default is false.
+   *
    * @emits sync - Emits an event with the synchronization result:
    *   - `result`: "ready" | "blocked" | "success" | "ledgerInvalidated" | "error"
    *   - `error`: Error object (if an error occurred) or null
    *
    * @throws {Error} If an unexpected error occurs during synchronization.
    */
-  public async sync(): Promise<KVSyncResult> {
+  public async sync(
+    ignoreTransactioErrors: boolean = false,
+  ): Promise<KVSyncResult> {
     // Throw if database isn't open
     this.ensureOpen();
 
     // Synchronization Logic (with lock if needed)
     let result: KVSyncResult["result"] = "ready";
-    let error: Error | null = null;
+    const errors: KVSyncErrors = [];
     try {
       const newTransactions = await this.ledger?.sync(this.disableIndex);
 
@@ -370,23 +385,27 @@ export class KV extends EventEmitter {
               this.applyTransactionToIndex(entry.transaction, entry.offset); // Refactored for clarity
             } catch (transactionError) {
               result = "error";
-              error = new Error("Error processing transaction", {
-                cause: transactionError,
-              });
-              break; // Stop processing on transaction error
+              errors.push(
+                new Error("Error processing transaction", {
+                  cause: transactionError,
+                }),
+              );
+              if (!ignoreTransactioErrors) {
+                break; // Stop processing on transaction error
+              }
             }
           }
         }
       }
     } catch (syncError) {
       result = "error";
-      error = new Error("Error during ledger sync", { cause: syncError });
+      errors.push(new Error("Error during ledger sync", { cause: syncError }));
     } finally {
       // @ts-ignore .emit exists
-      this.emit("sync", { result, error });
+      this.emit("sync", { result, errors });
     }
 
-    return { result, error };
+    return { result, errors };
   }
 
   /**
@@ -718,8 +737,8 @@ export class KV extends EventEmitter {
     try {
       // Sync before writing the transactions
       const syncResult = await this.sync();
-      if (syncResult.error) {
-        throw syncResult.error;
+      if (syncResult.errors.length > 0) {
+        throw syncResult.errors[0];
       }
 
       // Write all buffered transactions at once and get the base offset

@@ -107,8 +107,9 @@ deno install -frA --name ckv jsr:@cross/kv/cli
 ### Methods
 
 - `KV(options)` - Main class. Options are optional.
-  - `async open(filepath, createIfMissing = true)` - OOpens the KV store at the
-    specified file path, creating it if it doesn't exist (default behavior).
+  - `async open(filepath, createIfMissing = true, ignoreTransactionErrors = false)` -
+    Opens the KV store at the specified file path, creating it if it doesn't
+    exist (default behavior).
   - `async set<T>(key, value)` - Stores a value associated with the given key.
   - `async delete(key)` - Removes the key-value pair identified by the key.
   - `async get<T>(key)` - Retrieves the value associated with the specified key.
@@ -121,8 +122,8 @@ deno install -frA --name ckv jsr:@cross/kv/cli
     transaction history (all set and delete operations) for keys matching the
     query. Optionally recurses into subkeys and fetches the associated data.
   - `listKeys(query)` - Returns an array of all keys matching the given query.
-  - `async sync()` - Manually synchronizes the in-memory index with the on-disk
-    data store.
+  - `async sync(ignoreTransactionErrors = false)` - Manually synchronizes the
+    in-memory index with the on-disk data store.
   - `watch<T>(query, callback, recursive): void` - Registers a callback to be
     invoked whenever a matching transaction (set or delete) is added.
   - `unwatch<T>(query, callback): void` - Unregisters a previously registered

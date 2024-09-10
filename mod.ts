@@ -1,6 +1,7 @@
 export {
   KV,
   type KVOptions,
+  type KVSyncErrors,
   type KVSyncResult,
   type KVSyncResultStatus,
 } from "./src/lib/kv.ts";

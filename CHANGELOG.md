@@ -1,3 +1,8 @@
+## Unreleased
+
+- Add parameter `ignoreTransactionErrors` to `open()` and `sync()`.
+- Make cli `open` and `open:noindex` ignore errors by default.
+
 ## 0.16.5
 
 - Makes cli tool `open` and `close` more resilient to errors.

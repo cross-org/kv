@@ -33,12 +33,26 @@ export async function open(
   }
   container.db = new KV();
   try {
-    await container.db.open(dbPath, true);
+    const openResult = await container.db.open(dbPath, true, true);
+    // Operation succeeded
+    if (openResult?.errors) {
+      // Print errors in a user-friendly way
+      console.error(`Errors occurred during database opening:`);
+      for (const error of openResult.errors) {
+        if (error) {
+          console.error(`\t- ${error.message}`);
+          if (error.cause) console.error(`\t  ${error.cause}`);
+        } else {
+          console.error(`\t- An unknown error occurred.`);
+        }
+      }
+    }
     return true;
   } catch (e) {
     await container.db.close();
     container.db = undefined;
     console.error(`Could not open database: ${e.message}`);
+    if (e.cause) console.error(`\t${e.cause}`);
     return false;
   }
 }
@@ -58,7 +72,20 @@ export async function openNoIndex(
   }
   container.db = new KV({ disableIndex: true });
   try {
-    await container.db.open(dbPath, true);
+    const openResult = await container.db.open(dbPath, true, true);
+    // Operation succeeded
+    if (openResult?.errors) {
+      // Print errors in a user-friendly way
+      console.error(`Errors occurred during database opening:`);
+      for (const error of openResult.errors) {
+        if (error) {
+          console.error(`\t- ${error.message}`);
+          if (error.cause) console.error(`\t  ${error.cause}`);
+        } else {
+          console.error(`\t- An unknown error occurred.`);
+        }
+      }
+    }
     return true;
   } catch (e) {
     console.error(`Could not open database: ${e.message}`);
