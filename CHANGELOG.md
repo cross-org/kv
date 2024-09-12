@@ -2,6 +2,9 @@
 
 - Add parameter `ignoreTransactionErrors` to `open()` and `sync()`.
 - Make cli `open` and `open:noindex` ignore errors by default.
+- Add cli command `repair`
+- Add optional parameter `ignoreReadErrors` to commands `open`, `sync`, `scan`
+  and `vacuum`
 
 ## 0.16.5
 

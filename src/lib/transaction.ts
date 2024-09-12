@@ -98,6 +98,11 @@ export interface KVTransactionResult<T> {
    * verification and integrity checks.
    */
   hash: number | null;
+
+  /**
+   * Whether the record were fetched cleanly = true, or using error correction = false.
+   */
+  clean: boolean;
 }
 
 // Concrete implementation of the KVTransaction interface
@@ -162,6 +167,14 @@ export class KVTransaction {
     // Decode operation
     this.operation = dataView.getUint8(offset);
     offset += 1;
+
+    // Validate operation
+    if (
+      this.operation !== KVOperation.SET &&
+      this.operation !== KVOperation.DELETE
+    ) {
+      throw new Error("Invalid operation");
+    }
 
     // Decode timestamp
     this.timestamp = dataView.getFloat64(offset, false);
@@ -250,7 +263,7 @@ export class KVTransaction {
    * Converts the transaction to a KVTransactionResult object.
    * This assumes that the transaction's data is already validated or created correctly.
    */
-  public asResult<T>(): KVTransactionResult<T> {
+  public asResult<T>(clean: boolean = true): KVTransactionResult<T> {
     if (
       this.operation === undefined || this.timestamp === undefined
     ) {
@@ -264,6 +277,7 @@ export class KVTransaction {
       timestamp: this.timestamp,
       data: this.getData() as T,
       hash: this.hash || null,
+      clean,
     };
   }
 }

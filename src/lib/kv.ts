@@ -250,7 +250,7 @@ export class KV extends EventEmitter {
    *
    * @param filePath - Path to the base file for the KV store. Index and data files will be derived from this path.
    * @param createIfMissing - If true, the KV store files will be created if they do not exist. Default is true.
-   * @param ignoreTransactionErrors - If true, the open operation keeps going even if encountering errors, collection all of them. Default is false.
+   * @param ignoreReadErrors - If true, the open operation keeps going even if encountering errors, collection all of them. Default is false.
    */
   public async open(
     filePath: string,
@@ -354,7 +354,7 @@ export class KV extends EventEmitter {
    * - Automatically run on adding data
    * - Can be manually triggered for full consistency before data retrieval (iterate(), listAll(), get())
    *
-   * @param ignoreTransactionErrors - If true, the sync operation keeps going even if encountering errors, collection all of them. Default is false.
+   * @param ignoreReadErrors - If true, the sync operation keeps going even if encountering errors, collection all of them. Default is false.
    *
    * @emits sync - Emits an event with the synchronization result:
    *   - `result`: "ready" | "blocked" | "success" | "ledgerInvalidated" | "error"
@@ -363,7 +363,7 @@ export class KV extends EventEmitter {
    * @throws {Error} If an unexpected error occurs during synchronization.
    */
   public async sync(
-    ignoreTransactioErrors: boolean = false,
+    ignoreReadErrors: boolean = false,
   ): Promise<KVSyncResult> {
     // Throw if database isn't open
     this.ensureOpen();
@@ -372,7 +372,10 @@ export class KV extends EventEmitter {
     let result: KVSyncResult["result"] = "ready";
     const errors: KVSyncErrors = [];
     try {
-      const newTransactions = await this.ledger?.sync(this.disableIndex);
+      const newTransactions = await this.ledger?.sync(
+        this.disableIndex,
+        ignoreReadErrors,
+      );
 
       if (newTransactions === null) { // Ledger invalidated
         result = "ledgerInvalidated";
@@ -383,6 +386,17 @@ export class KV extends EventEmitter {
           for (const entry of newTransactions) {
             try {
               this.applyTransactionToIndex(entry.transaction, entry.offset); // Refactored for clarity
+              if (entry.errorCorrectionOffset !== 0) {
+                result = "error";
+                errors.push(
+                  new Error("Error processing transaction", {
+                    cause: "Invalid transaction skipped",
+                  }),
+                );
+                if (!ignoreReadErrors) {
+                  break; // Stop processing on transaction error
+                }
+              }
             } catch (transactionError) {
               result = "error";
               errors.push(
@@ -390,7 +404,7 @@ export class KV extends EventEmitter {
                   cause: transactionError,
                 }),
               );
-              if (!ignoreTransactioErrors) {
+              if (!ignoreReadErrors) {
                 break; // Stop processing on transaction error
               }
             }
@@ -414,20 +428,29 @@ export class KV extends EventEmitter {
    * @param query - Representation of the key to search for, or a query object for complex filters.
    * @param recursive - Match all entries matching the given query, and recurse.
    * @param fetchData - Return transactions with full data. Setting this to false improves performance, but does only yield transaction metadata.
+   * @param ignoreReadErrors - If true, the operation keeps going even if encountering errors, collection all of them. Default is false.
    * @returns An async generator yielding `KVTransactionResult` objects for each matching entry.
    */
   public async *scan<T = unknown>(
     query: KVKey | KVQuery,
     recursive: boolean = false,
     fetchData: boolean = true,
+    ignoreReadErrors = false,
   ): AsyncGenerator<KVTransactionResult<T>> {
     this.ensureOpen();
     if (this.ledger) {
       for await (
-        const result of this.ledger?.scan(query, recursive, fetchData)
+        const result of this.ledger?.scan(
+          query,
+          recursive,
+          fetchData,
+          ignoreReadErrors,
+        )
       ) {
         if (result?.transaction) { // Null check to ensure safety
-          const processedResult = result.transaction.asResult<T>();
+          const processedResult = result.transaction.asResult<T>(
+            result.errorCorrectionOffset === 0,
+          );
           yield processedResult;
         }
       }
@@ -487,16 +510,17 @@ export class KV extends EventEmitter {
    * This operation is essential for maintaining performance as the database grows over time.
    * It involves rewriting the ledger to remove deleted entries, potentially reducing its size.
    *
+   * @param ignoreReadErrors - If true, the vacuum operation keeps going even if encountering errors, essentially repairing the ledger. Default is false.
    * @remarks
    * - The database is automatically re-opened after the vacuum is complete to ensure consistency.
    *
    * @async
    */
-  public async vacuum(): Promise<void> {
+  public async vacuum(ignoreReadErrors: boolean = false): Promise<void> {
     this.ensureOpen();
     this.ensureIndex();
 
-    const ledgerIsReplaced = await this.ledger?.vacuum();
+    const ledgerIsReplaced = await this.ledger?.vacuum(ignoreReadErrors);
     if (ledgerIsReplaced) await this.open(this.ledgerPath!, false);
   }
 
@@ -589,9 +613,13 @@ export class KV extends EventEmitter {
 
     let count = 0;
     for (const offset of offsets) {
-      const result = await this.ledger?.rawGetTransaction(offset, true);
+      const result = await this.ledger?.rawGetTransaction(
+        offset,
+        this.ledger.header.currentOffset,
+        true,
+      );
       if (result?.transaction) {
-        yield result.transaction.asResult();
+        yield result.transaction.asResult(result.errorCorrectionOffset === 0);
         count++;
       }
     }
@@ -768,6 +796,7 @@ export class KV extends EventEmitter {
               length: transactionData.length,
               complete: true,
               transaction,
+              errorCorrectionOffset: 0,
             },
           );
 

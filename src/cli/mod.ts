@@ -21,6 +21,7 @@ import { scan } from "./commands/scan.ts";
 import { stats } from "./commands/stats.ts";
 import { count } from "./commands/count.ts";
 import { vacuum } from "./commands/vacuum.ts";
+import { repair } from "./commands/repair.ts";
 import { unlock } from "./commands/unlock.ts";
 import { sync } from "./commands/sync.ts";
 registerCommand("help", help);
@@ -39,6 +40,7 @@ registerCommand("delete", del);
 registerCommand("stats", stats);
 registerCommand("count", count);
 registerCommand("vacuum", vacuum);
+registerCommand("repair", repair);
 registerCommand("unlock", unlock);
 registerCommand("sync", sync);
 

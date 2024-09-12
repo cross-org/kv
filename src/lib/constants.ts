@@ -7,7 +7,7 @@ export const SUPPORTED_LEDGER_VERSIONS: string[] = [
   LEDGER_CURRENT_VERSION,
 ];
 export const LEDGER_PREFETCH_BYTES = 50 * 1024; // Prefetch chunks of 50KB of data while reading the ledger
-export const LEDGER_MAX_READ_FAILURES = 10;
+export const LEDGER_MAX_READ_FAILURE_BYTES = 10 * 1024 * 1024; // Allow at most 10MB of read failures
 export const SYNC_INTERVAL_MS = 2_500; // Overridable with instance configuration
 export const LEDGER_CACHE_MB = 100; // Allow 100 MBytes of the ledger to exist in RAM. Not an exact science due to LEDGER_CACHE_MEMORY_FACTOR.
 export const LEDGER_CACHE_MEMORY_FACTOR = 3; // Assume that ledger entries take about n times as much space when unwrapped in RAM. Used for ledger cache memory limit, does not need to be exakt.

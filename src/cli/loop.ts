@@ -47,7 +47,13 @@ export async function main() {
     const cmd = commandSplit[0].toLowerCase();
     const startTime = performance.now(); // Start measuring time
     if (commands[cmd]) {
-      const success = await commands[cmd](container, commandSplit.slice(1));
+      let success = false;
+      try {
+        success = await commands[cmd](container, commandSplit.slice(1));
+      } catch (error) {
+        console.error(error);
+        success = false;
+      }
       const endTime = performance.now(); // End measuring time
       const elapsedTime = (endTime - startTime).toFixed(2); // Calculate elapsed time (in milliseconds)
       console.log(

@@ -35,13 +35,18 @@ export async function open(
   try {
     const openResult = await container.db.open(dbPath, true, true);
     // Operation succeeded
-    if (openResult?.errors) {
+    if (openResult?.errors.length > 0) {
       // Print errors in a user-friendly way
       console.error(`Errors occurred during database opening:`);
       for (const error of openResult.errors) {
         if (error) {
-          console.error(`\t- ${error.message}`);
-          if (error.cause) console.error(`\t  ${error.cause}`);
+          if (error.cause) {
+            console.error(`\t  ${error.cause}`);
+          } else if (error.message) {
+            console.error(`\t- ${error.message}`);
+          } else {
+            console.error(`\t- ${error}`);
+          }
         } else {
           console.error(`\t- An unknown error occurred.`);
         }
@@ -79,8 +84,13 @@ export async function openNoIndex(
       console.error(`Errors occurred during database opening:`);
       for (const error of openResult.errors) {
         if (error) {
-          console.error(`\t- ${error.message}`);
-          if (error.cause) console.error(`\t  ${error.cause}`);
+          if (error.cause) {
+            console.error(`\t  ${error.cause}`);
+          } else if (error.message) {
+            console.error(`\t- ${error.message}`);
+          } else {
+            console.error(`\t- ${error}`);
+          }
         } else {
           console.error(`\t- An unknown error occurred.`);
         }
