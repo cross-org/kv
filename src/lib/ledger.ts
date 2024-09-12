@@ -185,7 +185,7 @@ export class KVLedger {
       }
 
       if (!SUPPORTED_LEDGER_VERSIONS.includes(decoded.ledgerVersion)) {
-        throw new Error("Invalid database version");
+        throw new Error("Unsupported database version");
       }
 
       if (

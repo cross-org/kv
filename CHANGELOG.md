@@ -1,4 +1,4 @@
-## Unreleased
+## 0.17.0
 
 - Add parameter `ignoreTransactionErrors` to `open()` and `sync()`.
 - Make cli `open` and `open:noindex` ignore errors by default.
