@@ -26,6 +26,7 @@ node_modules/
 .npmrc
 package-lock.json
 package.json
+scripts
 
 # Deno / JSR
 deno.lock

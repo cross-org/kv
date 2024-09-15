@@ -2,7 +2,7 @@
 import { type KVKey, KVKeyInstance } from "./key.ts";
 import { decode, encode } from "cbor-x";
 import { ENCODED_TRANSACTION_SIGNATURE } from "./constants.ts";
-import { murmurHash } from "ohash";
+import { faultyMurmurHash, murmurHash } from "./utils/murmur.ts";
 
 /**
  * Data structure of a Cross/kv transaction:
@@ -38,6 +38,21 @@ export enum KVOperation {
    * The operation of removing a key-value pair from the store.
    */
   DELETE = 2,
+}
+
+/**
+ * Enumerates the possible algorithms supported by the ledger
+ */
+export enum KVHashAlgorithm {
+  /**
+   * Correct custom MurmurHash3 implementation
+   */
+  MURMURHASH3 = 1,
+
+  /**
+   * Faulty MurmurHash3 implementation (ohash 1.1.3) used by ledger version B016
+   */
+  FAULTY_MURMURHASH3 = 2,
 }
 
 /**
@@ -112,6 +127,7 @@ export class KVTransaction {
   public timestamp?: number;
   public data?: Uint8Array;
   public hash?: number;
+  public hashIsFresh?: boolean;
   constructor() {
   }
 
@@ -132,6 +148,7 @@ export class KVTransaction {
       const valueData = new Uint8Array(encode(value));
       this.data = valueData;
       this.hash = murmurHash(valueData);
+      this.hashIsFresh = true;
     }
   }
 
@@ -192,9 +209,26 @@ export class KVTransaction {
     }
   }
 
-  public dataFromUint8Array(data: Uint8Array) {
-    if (murmurHash(data) !== this.hash!) {
-      throw new Error("Invalid data: Read data not matching hash");
+  public dataFromUint8Array(
+    data: Uint8Array,
+    expectedAlgorithm: KVHashAlgorithm = KVHashAlgorithm.MURMURHASH3,
+  ) {
+    switch (expectedAlgorithm) {
+      case KVHashAlgorithm.MURMURHASH3: {
+        if (murmurHash(data) !== this.hash!) {
+          throw new Error("Invalid data: Read data not matching hash");
+        }
+        break;
+      }
+      case KVHashAlgorithm.FAULTY_MURMURHASH3: {
+        if (faultyMurmurHash(data) !== this.hash!) {
+          throw new Error("Invalid data: Read data not matching hash");
+        }
+        break;
+      }
+      default: {
+        throw new Error("Incorrect hash algorithm requested");
+      }
     }
     this.data = data;
   }
@@ -204,7 +238,17 @@ export class KVTransaction {
    */
   public toUint8Array(): Uint8Array {
     const keyBytes = this.key!.toUint8Array();
-    const hashBytes = this.hash;
+
+    // Make sure hash is fresh
+    let hashBytes: number | undefined;
+    if (this.hashIsFresh) {
+      hashBytes = this.hash;
+    } else {
+      if (this.data) {
+        hashBytes = murmurHash(this.data);
+      }
+    }
+
     const pendingTransactionData = this.data;
 
     // Calculate total sizes

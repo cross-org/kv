@@ -14,10 +14,10 @@ jobs:
     uses: cross-org/workflows/.github/workflows/bun-ci.yml@main
     with:
       jsr_dependencies: "@cross/test @cross/fs @cross/runtime @std/assert@0.224.0 @std/path@0.224.0"
-      npm_dependencies: "cbor-x ohash"
+      npm_dependencies: "cbor-x"
   node_ci:
     uses: cross-org/workflows/.github/workflows/node-ci.yml@main
     with:
       jsr_dependencies: "@cross/test @cross/fs @cross/runtime @std/assert@0.224.0 @std/path@0.224.0"
-      npm_dependencies: "cbor-x ohash"
+      npm_dependencies: "cbor-x"
       test_target: "test/*.test.ts"

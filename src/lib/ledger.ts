@@ -21,7 +21,7 @@ import {
   SUPPORTED_LEDGER_VERSIONS,
   UNLOCKED_BYTES,
 } from "./constants.ts";
-import { KVOperation, KVTransaction } from "./transaction.ts";
+import { KVHashAlgorithm, KVOperation, KVTransaction } from "./transaction.ts";
 import { rename, unlink } from "@cross/fs";
 import type { FileHandle } from "node:fs/promises";
 import type { KVQuery } from "./key.ts";
@@ -150,6 +150,8 @@ export class KVLedger {
         if (result) {
           newTransactions.push(result);
           currentOffset += result.length + result.errorCorrectionOffset; // Advance the offset
+        } else if (!ignoreReadErrors) {
+          throw new Error("Unexpected end of file");
         } else {
           break;
         }
@@ -253,6 +255,8 @@ export class KVLedger {
           }
         }
         currentOffset += result.length + result.errorCorrectionOffset; // Advance the offset
+      } else if (!ignoreReadErrors) {
+        throw new Error("Unexpected end of file");
       } else {
         break;
       }
@@ -411,7 +415,13 @@ export class KVLedger {
               dataLength,
               baseOffset + errorCorrectionOffset + headerOffset + headerLength,
             );
-            transaction.dataFromUint8Array(transactionData);
+            /* Ignore hash check for ledger version B016 */
+            transaction.dataFromUint8Array(
+              transactionData,
+              this.header.ledgerVersion === "B016"
+                ? KVHashAlgorithm.FAULTY_MURMURHASH3
+                : KVHashAlgorithm.MURMURHASH3,
+            );
           }
           // Get transaction result
           const result = {
@@ -466,8 +476,8 @@ export class KVLedger {
 
           // Update the header after each read, to make sure we catch any new transactions
           this.readHeader();
-        } else {
-          break;
+        } else if (!ignoreReadErrors) {
+          throw new Error("Unexpected end of file");
         }
       }
 
@@ -497,6 +507,8 @@ export class KVLedger {
             addedKeys.add(result.transaction.key!.stringify());
             validTransactions.push(result);
           }
+        } else if (!ignoreReadErrors) {
+          throw new Error("Unexpected end of file");
         }
       }
 
@@ -525,6 +537,8 @@ export class KVLedger {
           await tempLedger.add([{
             transactionData: transaction.transaction.toUint8Array(),
           }]);
+        } else if (!ignoreReadErrors) {
+          throw new Error("Unexpected end of file");
         }
       }
       this.header.currentOffset = tempLedger.header.currentOffset;
