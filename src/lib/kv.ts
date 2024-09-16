@@ -4,6 +4,7 @@
 import { KVIndex } from "./index.ts";
 import { type KVKey, KVKeyInstance, type KVQuery } from "./key.ts";
 import {
+  KVHashAlgorithm,
   KVOperation,
   KVTransaction,
   type KVTransactionResult,
@@ -685,12 +686,15 @@ export class KV extends EventEmitter {
     // Ensure the key is ok
     const validatedKey = new KVKeyInstance(key);
     const transaction = new KVTransaction();
-
+    const hashAlgo = this.ledger?.header.ledgerVersion === "B016"
+      ? KVHashAlgorithm.FAULTY_MURMURHASH3
+      : KVHashAlgorithm.MURMURHASH3;
     await transaction.create(
       validatedKey,
       KVOperation.SET,
       Date.now(),
       value,
+      hashAlgo,
     );
     // Enqueue transaction
     if (!this.isInTransaction) {
