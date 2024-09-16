@@ -136,6 +136,7 @@ export class KVTransaction {
     operation: KVOperation,
     timestamp: number,
     value?: unknown,
+    algorithm?: KVHashAlgorithm,
   ) {
     // Validate
     if (this.operation === KVOperation.SET && value === undefined) {
@@ -147,7 +148,19 @@ export class KVTransaction {
     if (operation !== KVOperation.DELETE && value) {
       const valueData = new Uint8Array(encode(value));
       this.data = valueData;
-      this.hash = murmurHash(valueData);
+      switch (algorithm) {
+        case KVHashAlgorithm.MURMURHASH3: {
+          this.hash = murmurHash(this.data);
+          break;
+        }
+        case KVHashAlgorithm.FAULTY_MURMURHASH3: {
+          this.hash = faultyMurmurHash(this.data);
+          break;
+        }
+        default: {
+          throw new Error("Incorrect hash algorithm requested");
+        }
+      }
       this.hashIsFresh = true;
     }
   }

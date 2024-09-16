@@ -5,6 +5,8 @@
 - Add cli command `repair`
 - Add optional parameter `ignoreReadErrors` to commands `open`, `sync`, `scan`
   and `vacuum`
+- Fix problem with murmurHash implementation
+- Allow using different hashing algorithms per database version
 
 ## 0.16.5
 

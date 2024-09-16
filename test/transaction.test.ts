@@ -1,7 +1,11 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { test } from "@cross/test";
 import { KVKeyInstance } from "../src/lib/key.ts";
-import { KVOperation, KVTransaction } from "../src/lib/transaction.ts";
+import {
+  KVHashAlgorithm,
+  KVOperation,
+  KVTransaction,
+} from "../src/lib/transaction.ts";
 import { ENCODED_TRANSACTION_SIGNATURE } from "../src/lib/constants.ts";
 
 test("KVTransaction: create and toUint8Array", async () => {
@@ -10,7 +14,13 @@ test("KVTransaction: create and toUint8Array", async () => {
   const timestamp = Date.now();
 
   const transaction = new KVTransaction();
-  await transaction.create(key, KVOperation.SET, timestamp, value);
+  await transaction.create(
+    key,
+    KVOperation.SET,
+    timestamp,
+    value,
+    KVHashAlgorithm.MURMURHASH3,
+  );
 
   const uint8Array = transaction.toUint8Array();
   const decodedTransaction = new KVTransaction();

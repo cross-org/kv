@@ -14,9 +14,9 @@ export async function sync(
   try {
     const syncResult = await container.db?.sync();
     if (syncResult) {
-      if (syncResult.error) {
+      if (syncResult.errors.length > 0) {
         console.error(
-          `Sync failedm status: ${syncResult.result}, error: ${syncResult.error.message}`,
+          `Sync failed, status: ${syncResult.result}, error: ${syncResult.errors}`,
         );
         console.log("");
         return false;
