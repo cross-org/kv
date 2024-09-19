@@ -1,3 +1,8 @@
+## 0.17.1
+
+- Fix missig awaits when closing file descriptor
+- Ensure file is locked by the current process before writing anything
+
 ## 0.17.0
 
 - Add parameter `ignoreTransactionErrors` to `open()` and `sync()`.

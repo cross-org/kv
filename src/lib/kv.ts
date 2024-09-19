@@ -10,7 +10,11 @@ import {
   type KVTransactionResult,
 } from "./transaction.ts";
 import { KVLedger } from "./ledger.ts";
-import { LEDGER_CACHE_MB, SYNC_INTERVAL_MS } from "./constants.ts";
+import {
+  FORCE_UNLOCK_SIGNAL,
+  LEDGER_CACHE_MB,
+  SYNC_INTERVAL_MS,
+} from "./constants.ts";
 
 // External dependencies
 import { EventEmitter } from "node:events";
@@ -295,8 +299,7 @@ export class KV extends EventEmitter {
     if (!this.ledger) {
       throw new Error("No ledger is currently open.");
     }
-
-    await this.ledger.unlock();
+    await this.ledger.unlock(BigInt(FORCE_UNLOCK_SIGNAL));
   }
 
   /**
@@ -744,6 +747,7 @@ export class KV extends EventEmitter {
   public async endTransaction(): Promise<Error[]> {
     this.ensureOpen();
     if (!this.isInTransaction) throw new Error("Not in a transaction");
+    if (!this.ledger) throw new Error("No ledger open");
 
     const bufferedTransactions: {
       transaction: KVTransaction;
@@ -764,7 +768,7 @@ export class KV extends EventEmitter {
       currentOffset += transactionData.length;
     }
 
-    await this.ledger?.lock();
+    const lockId = await this.ledger.lock();
     let unlocked = false;
     try {
       // Sync before writing the transactions
@@ -774,7 +778,7 @@ export class KV extends EventEmitter {
       }
 
       // Write all buffered transactions at once and get the base offset
-      const baseOffset = await this.ledger?.add(bufferedTransactions);
+      const baseOffset = await this.ledger?.add(bufferedTransactions, lockId);
 
       if (baseOffset === undefined) {
         throw new Error(
@@ -783,7 +787,7 @@ export class KV extends EventEmitter {
       }
 
       // Unlock early if everying successed
-      await this.ledger?.unlock();
+      await this.ledger?.unlock(lockId);
       unlocked = true;
 
       // Update the index and check for errors
@@ -817,7 +821,7 @@ export class KV extends EventEmitter {
       }
     } finally {
       // Back-up unlock
-      if (!unlocked) await this.ledger?.unlock();
+      if (!unlocked) await this.ledger?.unlock(lockId);
       this.pendingTransactions = []; // Clear pending transactions
       this.isInTransaction = false;
     }

@@ -1,5 +1,5 @@
 // Configurable
-export const LOCK_DEFAULT_MAX_RETRIES = 32;
+export const LOCK_DEFAULT_MAX_RETRIES = 40;
 export const LOCK_DEFAULT_INITIAL_RETRY_INTERVAL_MS = 30; // Increased with itself on each retry, so the actual retry interval is 20, 40, 60 etc. 32 and 20 become about 10 seconds total.
 export const LOCK_STALE_TIMEOUT_MS = 6 * 60 * 60 * 1000; // Automatically unlock a ledger that has been locked for more than 2*60*60*1000 = 2 hours.
 export const LEDGER_CURRENT_VERSION: string = "B017";
@@ -23,3 +23,4 @@ export const ENCODED_TRANSACTION_SIGNATURE: Uint8Array = new TextEncoder()
   .encode("T;"); // Cross/Kv Transaction
 export const UNLOCKED_BYTES = new Uint8Array(LOCKED_BYTES_LENGTH);
 export const LOCKED_BYTES = new Uint8Array(LOCKED_BYTES_LENGTH);
+export const FORCE_UNLOCK_SIGNAL = 1;

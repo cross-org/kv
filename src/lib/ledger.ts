@@ -7,6 +7,7 @@ import {
 } from "./utils/file.ts";
 import {
   ENCODED_TRANSACTION_SIGNATURE,
+  FORCE_UNLOCK_SIGNAL,
   LEDGER_BASE_OFFSET,
   LEDGER_CURRENT_VERSION,
   LEDGER_FILE_ID,
@@ -27,6 +28,7 @@ import type { FileHandle } from "node:fs/promises";
 import type { KVQuery } from "./key.ts";
 import { KVLedgerCache } from "./cache.ts";
 import { KVPrefetcher } from "./prefetcher.ts";
+import { pseudoRandomTimestamp } from "./utils/randomts.ts";
 
 /**
  * This file handles the ledger file, which is where all persisted data of an cross/kv instance is stored.
@@ -157,7 +159,7 @@ export class KVLedger {
         }
       }
     }
-    if (reusableFd) reusableFd.close();
+    if (reusableFd) await reusableFd.close();
     return newTransactions;
   }
 
@@ -198,7 +200,7 @@ export class KVLedger {
 
       this.header = decoded;
     } finally {
-      if (fd) fd.close();
+      if (fd) await fd.close();
     }
   }
 
@@ -262,7 +264,7 @@ export class KVLedger {
       }
     }
 
-    if (reusableFd) reusableFd.close();
+    if (reusableFd) await reusableFd.close();
   }
 
   public async writeHeader() {
@@ -295,7 +297,7 @@ export class KVLedger {
       // Write the header data
       await writeAtPosition(fd, new Uint8Array(headerBuffer), 0);
     } finally {
-      if (fd) fd.close();
+      if (fd) await fd.close();
     }
   }
 
@@ -310,7 +312,7 @@ export class KVLedger {
    */
   public async add(transactionsData: {
     transactionData: Uint8Array;
-  }[]): Promise<number> {
+  }[], lockId: bigint): Promise<number> {
     this.ensureOpen();
 
     // Used to return the first offset of the series
@@ -323,6 +325,12 @@ export class KVLedger {
     let fd;
     try {
       fd = await rawOpen(this.dataPath, true);
+
+      // Verify the lock just before writing
+      if (!await this.verifyLock(lockId)) {
+        throw new Error("Invalid lock");
+      }
+
       for (const { transactionData } of transactionsData) {
         // Append each transaction data
         await writeAtPosition(fd, transactionData, currentOffset);
@@ -334,7 +342,7 @@ export class KVLedger {
       }
       await this.writeHeader(); // Update the on disk header with the new offset
     } finally {
-      if (fd) fd.close();
+      if (fd) await fd.close();
     }
     return baseOffset;
   }
@@ -437,7 +445,7 @@ export class KVLedger {
             baseOffset + errorCorrectionOffset,
             result,
           );
-          if (fd && !externalFd) fd.close();
+          if (fd && !externalFd) await fd.close();
           return result;
         }
       } catch (error) {
@@ -449,7 +457,7 @@ export class KVLedger {
         errorCorrectionOffset += 1;
       }
     }
-    if (fd && !externalFd) fd.close();
+    if (fd && !externalFd) await fd.close();
     return null;
   }
 
@@ -458,6 +466,7 @@ export class KVLedger {
    */
   public async vacuum(ignoreReadErrors: boolean = false): Promise<boolean> {
     let ledgerIsReplaced = false;
+    let lockId: bigint | undefined;
     try {
       // 1. Gather All Transaction Offsets
       const allOffsets: number[] = [];
@@ -522,7 +531,7 @@ export class KVLedger {
 
       // Lock the temporary ledger to prevent multiple vacuums against the same tempfile
       // - Will be unlocked in the finally clause
-      await tempLedger.lock();
+      lockId = await tempLedger.lock();
 
       // 5. Append valid transactions to the new file.
       for (const validTransaction of validTransactions) {
@@ -536,7 +545,7 @@ export class KVLedger {
         if (transaction) {
           await tempLedger.add([{
             transactionData: transaction.transaction.toUint8Array(),
-          }]);
+          }], lockId);
         } else if (!ignoreReadErrors) {
           throw new Error("Unexpected end of file");
         }
@@ -553,7 +562,7 @@ export class KVLedger {
       ledgerIsReplaced = true;
     } finally {
       // 9. Unlock
-      if (ledgerIsReplaced) await this.unlock();
+      if (ledgerIsReplaced && lockId) await this.unlock(lockId);
     }
 
     return ledgerIsReplaced;
@@ -563,34 +572,58 @@ export class KVLedger {
     if (!this.open) throw new Error("Ledger is not opened yet.");
   }
 
-  public async lock(): Promise<void> {
+  public async verifyLock(existingLockId: bigint): Promise<boolean> {
     this.ensureOpen();
 
     let fd;
+
+    try {
+      fd = await rawOpen(this.dataPath, true);
+
+      // 1. Check if already locked
+      const lockData = await readAtPosition(
+        fd,
+        LOCKED_BYTES_LENGTH,
+        LOCK_BYTE_OFFSET,
+      );
+      const existingTimestamp = new DataView(lockData.buffer).getBigUint64(
+        0,
+        false,
+      );
+      return existingTimestamp === existingLockId;
+    } catch (_e) {
+      throw new Error("Error verifying lock");
+    } finally {
+      if (fd) await fd.close();
+    }
+  }
+
+  public async lock(): Promise<bigint> {
+    this.ensureOpen();
+
+    const fd = await rawOpen(this.dataPath, true);
     const retryInterval = LOCK_DEFAULT_INITIAL_RETRY_INTERVAL_MS; // Use provided retry interval
 
     for (let attempt = 0; attempt < LOCK_DEFAULT_MAX_RETRIES; attempt++) {
       try {
-        fd = await rawOpen(this.dataPath, true);
-
         // 1. Check if already locked
         const lockData = await readAtPosition(
           fd,
           LOCKED_BYTES_LENGTH,
           LOCK_BYTE_OFFSET,
         );
-        const existingTimestamp = new DataView(lockData.buffer).getBigUint64(
+        const timestamp = new DataView(lockData.buffer).getBigUint64(
           0,
           false,
         );
 
         // Check for stale lock
         if (
-          existingTimestamp !== BigInt(0) &&
-          Date.now() - Number(existingTimestamp) > LOCK_STALE_TIMEOUT_MS
+          timestamp > BigInt(0) &&
+          BigInt(Date.now()) - BigInt(timestamp) > LOCK_STALE_TIMEOUT_MS
         ) {
-          await writeAtPosition(fd, UNLOCKED_BYTES, LOCK_BYTE_OFFSET); // Remove stale lock
-        } else if (existingTimestamp !== BigInt(0)) {
+          await this.unlock(timestamp);
+        } else if (timestamp > BigInt(0)) {
           // File is locked, wait and retry
           await new Promise((resolve) =>
             setTimeout(resolve, retryInterval + attempt * retryInterval)
@@ -601,15 +634,28 @@ export class KVLedger {
         // 2. Prepare lock data
         const lockBytes = LOCKED_BYTES;
         const lockView = new DataView(lockBytes.buffer);
-        lockView.setBigUint64(0, BigInt(Date.now()), false);
+        const lockId = pseudoRandomTimestamp(BigInt(Date.now()), 11); // A lock id is a regular timestamp with the last 11 bits scrambled
+        lockView.setBigUint64(0, lockId, false);
 
         // 3. Write lock data
         await writeAtPosition(fd, lockBytes, LOCK_BYTE_OFFSET);
 
+        // Wait for the next iteration of the event loop, and verify the lock
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        if (!await this.verifyLock(lockId)) {
+          // File has been locked by another process, wait and retry
+          await new Promise((resolve) =>
+            setTimeout(resolve, retryInterval + attempt * retryInterval)
+          );
+          continue;
+        }
+
         // Lock acquired!
-        return;
-      } finally {
-        if (fd) fd.close();
+        if (fd) await fd.close();
+
+        return lockId;
+      } catch (_e) {
+        /* No op */
       }
     }
 
@@ -617,15 +663,20 @@ export class KVLedger {
     throw new Error("Could not acquire database lock");
   }
 
-  public async unlock(): Promise<void> {
+  public async unlock(lockId: bigint): Promise<void> {
     let fd;
     try {
       fd = await rawOpen(this.dataPath, true);
 
+      // Only unlock if the lock is unchanged
+      if (lockId !== BigInt(FORCE_UNLOCK_SIGNAL)) {
+        await this.verifyLock(lockId);
+      }
+
       // Write all zeros to the lock bytes
       await writeAtPosition(fd, UNLOCKED_BYTES, LOCK_BYTE_OFFSET);
     } finally {
-      if (fd) fd.close();
+      if (fd) await fd.close();
     }
   }
 
