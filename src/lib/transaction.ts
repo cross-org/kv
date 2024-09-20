@@ -17,14 +17,13 @@ import { faultyMurmurHash, murmurHash } from "./utils/murmur.ts";
  *
  * Header Bytes Structure:
  *
- * Key Length (uint32) | Key Data... | Operation (uint8) | Timestamp (uint32) | Hash Length (uint32) | Hash Bytes... |
-
+ * Key Length (uint32) | Key Data... | Operation (uint8) | Timestamp (float64, little endian) | Hash Length (uint32) | Hash Bytes... |
  * - Key Length: The length of the key in bytes.
  * - Key Data: Data returned by the key
  * - Operation: The type of operation (SET or DELETE).
  * - Timestamp: The timestamp of the operation.
- * - Hash Length: The hash (32 bit positive integer).
- **/
+ * - Hash: A hash of the data (32 bit positive integer).
+ */
 
 /**
  * Enumerates the possible operations that can be performed on a key-value pair in the KV store.

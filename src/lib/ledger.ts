@@ -35,13 +35,17 @@ import { pseudoRandomTimestamp } from "./utils/randomts.ts";
  *
  * The file structure consists of an 1024 byte header:
  *
- * | File ID (4 bytes) | Ledger Version (4 bytes) | Created Timestamp (4 bytes) | Current Offset (8 bytes) | (Header padding...) | (Transactions...)
+ * | File ID (4 bytes) | Ledger Version (4 bytes) | Created Timestamp (8 bytes) | Current Offset (8 bytes) | (Header padding...) | (Lock id) | (Transactions...)
  *
  * - File ID: A fixed string "CKVD" to identify the file type.
  * - Ledger Version: A string indicating the ledger version (e.g., "ALPH" for alpha).
  * - Timestamp: A Unix timestamp of when the ledger was created, set to current date on creation or vacuuming.
  * - Current Offset: The ending offset of the last written transaction data.
  * - Padding: The leftover space in the header is reserved for future use.
+ * - Lock id: The last 8 bytes (uint64) of the header is either 0, which means the ledger is not locked,
+ *            or a modified javascript timestamp, which means the ledger is locked.
+ *            The last 11 bits of the timestamp is randomized, to prevent lock id collisions when two processes
+ *            tries to write at the exact same time.
  *
  * Following the header, is a long list of transactions described in detail in transaction.ts.
  */
