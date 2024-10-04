@@ -3,6 +3,7 @@ import { CurrentRuntime, Runtime } from "@cross/runtime";
 import { createInterface } from "node:readline";
 
 import type { KVCliHandler, KVDBContainer } from "./common.ts";
+import process from "node:process";
 
 // Command handling structure
 const commands: { [command: string]: KVCliHandler } = {};

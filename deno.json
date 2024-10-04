@@ -1,6 +1,6 @@
 {
   "name": "@cross/kv",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "exports": {
     ".": "./mod.ts",
     "./cli": "./src/cli/mod.ts"
@@ -11,6 +11,9 @@
         "no-node-globals"
       ]
     }
+  },
+  "compilerOptions": {
+    "useUnknownInCatchVariables": false
   },
   "imports": {
     "@cross/fs": "jsr:@cross/fs@^0.1.11",

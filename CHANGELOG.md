@@ -1,3 +1,7 @@
+## 0.17.2
+
+- Update to work with Deno 2.0
+
 ## 0.17.1
 
 - Fix missig awaits when closing file descriptor
