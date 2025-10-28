@@ -255,12 +255,12 @@ export class KV extends EventEmitter {
    *
    * @param filePath - Path to the base file for the KV store. Index and data files will be derived from this path.
    * @param createIfMissing - If true, the KV store files will be created if they do not exist. Default is true.
-   * @param ignoreReadErrors - If true, the open operation keeps going even if encountering errors, collection all of them. Default is false.
+   * @param ignoreTransactionErrors - If true, the open operation keeps going even if encountering errors, collection all of them. Default is false.
    */
   public async open(
     filePath: string,
     createIfMissing: boolean = true,
-    ignoreTransactioErrors: boolean = false,
+    ignoreTransactionErrors: boolean = false,
   ): Promise<KVSyncResult> {
     // Do not allow re-opening a closed database
     if (this.aborted) {
@@ -279,8 +279,8 @@ export class KV extends EventEmitter {
     // Do the initial synchronization
     // - If `this.autoSync` is enabled, additional synchronizations will be carried out every `this.syncIntervalMs`
 
-    const syncResult = await this.sync(ignoreTransactioErrors);
-    if (syncResult.errors?.length > 0 && !ignoreTransactioErrors) {
+    const syncResult = await this.sync(ignoreTransactionErrors);
+    if (syncResult.errors?.length > 0 && !ignoreTransactionErrors) {
       throw syncResult.errors[0];
     }
     return syncResult;
