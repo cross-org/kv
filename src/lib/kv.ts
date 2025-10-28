@@ -255,7 +255,7 @@ export class KV extends EventEmitter {
    *
    * @param filePath - Path to the base file for the KV store. Index and data files will be derived from this path.
    * @param createIfMissing - If true, the KV store files will be created if they do not exist. Default is true.
-   * @param ignoreTransactionErrors - If true, the open operation keeps going even if encountering errors, collection all of them. Default is false.
+   * @param ignoreTransactionErrors - If true, the open operation keeps going even if encountering errors, collecting all of them. Default is false.
    */
   public async open(
     filePath: string,
