@@ -11,6 +11,7 @@ jobs:
     with:
       entrypoint: mod.ts
       lint_docs: false
+      allow_outdated: false
   bun_ci:
     uses: cross-org/workflows/.github/workflows/bun-ci.yml@main
     with:
