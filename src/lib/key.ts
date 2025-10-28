@@ -89,7 +89,7 @@ export class KVKeyInstance {
    */
   public toUint8Array(): Uint8Array {
     const data = encode(this.key);
-    return new Uint8Array(data, 0, data.byteLength);
+    return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   }
 
   /**
