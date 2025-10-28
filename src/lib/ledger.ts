@@ -98,6 +98,9 @@ export class KVLedger {
     // Make sure there is a file
     const alreadyExists = await ensureFile(this.dataPath);
 
+    // Mark as opened first, as some operations during initialization require this
+    this.opened = true;
+
     // Read or create the file header
     if (alreadyExists) {
       // No-op, sync reads the header from file when needed
@@ -107,8 +110,6 @@ export class KVLedger {
     } else {
       throw new Error("Database not found.");
     }
-
-    this.opened = true;
   }
 
   /**
@@ -573,7 +574,7 @@ export class KVLedger {
   }
 
   private ensureOpen(): void {
-    if (!this.open) throw new Error("Ledger is not opened yet.");
+    if (!this.opened) throw new Error("Ledger is not opened yet.");
   }
 
   public async verifyLock(existingLockId: bigint): Promise<boolean> {
