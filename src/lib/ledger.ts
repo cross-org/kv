@@ -573,7 +573,7 @@ export class KVLedger {
   }
 
   private ensureOpen(): void {
-    if (!this.open) throw new Error("Ledger is not opened yet.");
+    if (!this.opened) throw new Error("Ledger is not opened yet.");
   }
 
   public async verifyLock(existingLockId: bigint): Promise<boolean> {
