@@ -7,11 +7,10 @@ import {
   writeAtPosition,
 } from "./utils/file.ts";
 import { unlink } from "@cross/fs";
-import type { FileHandle } from "node:fs/promises";
 
 /**
  * Header structure for the index cache file.
- * 
+ *
  * The cache file structure:
  * | Magic Bytes (4) | Version (4) | Ledger Created (8) | Ledger Offset (8) | Index Data Length (8) | Index Data (variable) |
  */
@@ -34,7 +33,7 @@ const CACHE_HEADER_SIZE = 32; // 4 + 4 + 8 + 8 + 8 = 32 bytes
 
 /**
  * Manages persistent caching of the KVIndex to speed up cold starts.
- * 
+ *
  * The index cache allows loading a pre-built index from disk instead of
  * rebuilding it from scratch by reading all transactions from the ledger.
  */
@@ -51,11 +50,11 @@ export class KVIndexCache {
    */
   private serializeIndexNode(node: KVIndexContent): unknown {
     const result: Record<string, unknown> = {};
-    
+
     if (node.reference !== undefined) {
       result.ref = node.reference;
     }
-    
+
     if (node.children.size > 0) {
       const children: Record<string, unknown> = {};
       for (const [key, value] of node.children.entries()) {
@@ -63,7 +62,7 @@ export class KVIndexCache {
       }
       result.children = children;
     }
-    
+
     return result;
   }
 
@@ -99,7 +98,7 @@ export class KVIndexCache {
 
   /**
    * Saves the current index to the cache file.
-   * 
+   *
    * @param index - The index to save
    * @param ledgerCreated - The creation timestamp of the ledger
    * @param ledgerOffset - The ledger offset up to which this index represents
@@ -119,7 +118,7 @@ export class KVIndexCache {
       // Create header
       const header = new Uint8Array(CACHE_HEADER_SIZE);
       const view = new DataView(header.buffer);
-      
+
       // Magic bytes
       new TextEncoder().encodeInto(CACHE_MAGIC, header);
       // Version
@@ -153,7 +152,7 @@ export class KVIndexCache {
 
   /**
    * Loads the index from the cache file if it exists and is valid.
-   * 
+   *
    * @param ledgerCreated - The creation timestamp of the current ledger
    * @returns An object with the loaded index and the ledger offset, or null if cache is invalid/missing
    */
@@ -171,7 +170,7 @@ export class KVIndexCache {
       const fd = await rawOpen(this.cachePath, false);
       try {
         const headerData = await readAtPosition(fd, CACHE_HEADER_SIZE, 0);
-        
+
         // Parse header
         const magic = new TextDecoder().decode(headerData.subarray(0, 4));
         const version = new TextDecoder().decode(headerData.subarray(4, 8));
@@ -209,7 +208,7 @@ export class KVIndexCache {
         // Deserialize index
         const jsonData = new TextDecoder().decode(indexData);
         const serialized = JSON.parse(jsonData);
-        
+
         const index = new KVIndex();
         index.index = this.deserializeIndexNode(serialized);
 
