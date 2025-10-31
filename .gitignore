@@ -44,3 +44,6 @@ mydatabase*/
 
 # Pup data
 .pup
+
+# Lumocs generated site
+_site
