@@ -210,7 +210,7 @@ export class KVIndexCache {
         const serialized = JSON.parse(jsonData);
 
         const index = new KVIndex();
-        index.index = this.deserializeIndexNode(serialized);
+        index.setIndex(this.deserializeIndexNode(serialized));
 
         return {
           index,
