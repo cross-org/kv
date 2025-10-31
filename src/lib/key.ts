@@ -158,7 +158,7 @@ export class KVKeyInstance {
 
       if (
         typeof element !== "string" && typeof element !== "number" &&
-        !(element.from !== undefined || element.to != undefined)
+        !(element.from !== undefined || element.to !== undefined)
       ) {
         throw new TypeError("Key elements must be strings or numbers");
       }
