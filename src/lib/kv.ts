@@ -308,7 +308,6 @@ export class KV extends EventEmitter {
     }
 
     // Try to load index from cache if available
-    let indexLoadedFromCache = false;
     if (this.indexCache && this.enableIndexCache && !this.disableIndex) {
       const cachedIndex = await this.indexCache.load(
         this.ledger.header.created,
@@ -318,7 +317,6 @@ export class KV extends EventEmitter {
         this.index = cachedIndex.index;
         // Update internal state to reflect cached offset
         this.ledger.header.currentOffset = cachedIndex.ledgerOffset;
-        indexLoadedFromCache = true;
       }
     }
 

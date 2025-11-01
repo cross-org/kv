@@ -2,11 +2,16 @@
 
 ## Overview
 
-The index cache feature provides a persistent caching mechanism for the in-memory index, dramatically improving cold start performance for large databases. When a database is opened, instead of rebuilding the entire index from the ledger, the cached index is loaded from disk and only new transactions are synced.
+The index cache feature provides a persistent caching mechanism for the
+in-memory index, dramatically improving cold start performance for large
+databases. When a database is opened, instead of rebuilding the entire index
+from the ledger, the cached index is loaded from disk and only new transactions
+are synced.
 
 ## Problem Statement
 
 Before this implementation:
+
 1. Every time a database is opened, the entire index must be rebuilt
 2. The index is built by reading and processing every transaction in the ledger
 3. For large databases with thousands of entries, this can take several seconds
@@ -15,6 +20,7 @@ Before this implementation:
 ## Solution
 
 The index cache implementation provides:
+
 1. Persistent storage of the index structure to a `.idx` file
 2. Fast loading of the cached index on startup
 3. Incremental synchronization of new transactions since cache creation
@@ -48,7 +54,8 @@ The `.idx` file has a simple binary format:
 
 ### Index Serialization
 
-The index is a tree structure with Maps. Serialization converts it to plain objects:
+The index is a tree structure with Maps. Serialization converts it to plain
+objects:
 
 ```typescript
 // Original structure
@@ -71,6 +78,7 @@ Map {
 ```
 
 Key handling:
+
 - Numeric keys are preserved (detected via regex during deserialization)
 - String keys remain strings
 - Reference offsets are stored as `ref` field
@@ -122,6 +130,7 @@ The cache implementation includes multiple validation layers:
 5. **JSON parsing**: Validates structure integrity
 
 All validation failures result in:
+
 - Warning message to console
 - Graceful fallback to full index rebuild
 - No application errors or data corruption
@@ -129,16 +138,19 @@ All validation failures result in:
 ## Performance Characteristics
 
 ### Without Cache
+
 - Time complexity: O(n) where n = number of transactions
 - Startup time: Proportional to database size
 - Example: ~2000ms for 5000 entries
 
 ### With Cache
+
 - Time complexity: O(m) where m = new transactions since cache
 - Startup time: Nearly constant for stable databases
 - Example: ~50ms for 5000 cached + 0 new entries
 
 ### Cache Overhead
+
 - File size: ~1-2x the in-memory index size
 - Save time: ~10-50ms depending on index size
 - No runtime performance impact (only affects startup/shutdown)
@@ -147,12 +159,13 @@ All validation failures result in:
 
 ```typescript
 const db = new KV({
-  enableIndexCache: true,  // Enable/disable cache (default: true)
-  disableIndex: false,     // Must be false for cache to work
+  enableIndexCache: true, // Enable/disable cache (default: true)
+  disableIndex: false, // Must be false for cache to work
 });
 ```
 
 The cache is automatically enabled by default. Users can disable it if:
+
 - They want to minimize disk usage
 - They have very small databases (where cache overhead > rebuild time)
 - They're concerned about .idx files
@@ -160,6 +173,7 @@ The cache is automatically enabled by default. Users can disable it if:
 ## Edge Cases and Limitations
 
 ### Handled Edge Cases
+
 1. **Corrupted cache file**: Falls back to full rebuild
 2. **Version mismatch**: Ignores cache, rebuilds index
 3. **Ledger recreated**: Cache invalidated by timestamp check
@@ -167,6 +181,7 @@ The cache is automatically enabled by default. Users can disable it if:
 5. **Deleted keys**: Properly excluded from cached index
 
 ### Known Limitations
+
 1. Cache is not shared between processes (by design)
 2. Cache file grows with index size (proportional to key count)
 3. Cache save happens on close (not incrementally)
@@ -185,6 +200,7 @@ The implementation includes comprehensive tests:
 7. **Performance**: Benchmark showing improvement
 
 Run tests with:
+
 ```bash
 deno test --allow-read --allow-write test/index-cache.test.ts
 ```
@@ -209,4 +225,6 @@ Potential enhancements (not implemented):
 
 ## Conclusion
 
-The index cache implementation provides a significant performance improvement for large databases with minimal complexity and excellent error handling. It's enabled by default and degrades gracefully in all failure scenarios.
+The index cache implementation provides a significant performance improvement
+for large databases with minimal complexity and excellent error handling. It's
+enabled by default and degrades gracefully in all failure scenarios.
