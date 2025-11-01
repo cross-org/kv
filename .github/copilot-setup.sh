@@ -21,10 +21,14 @@ echo "Installing Node.js..."
 if ! command -v node &> /dev/null; then
     if curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash; then
         export NVM_DIR="$HOME/.nvm"
-        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-        nvm install --lts
-        nvm use --lts
-        echo "Node.js installed successfully"
+        if [ -s "$NVM_DIR/nvm.sh" ]; then
+            \. "$NVM_DIR/nvm.sh"
+            nvm install --lts
+            nvm use --lts
+            echo "Node.js installed successfully"
+        else
+            echo "Warning: Node.js nvm.sh script not found"
+        fi
     else
         echo "Warning: Node.js installation failed"
     fi
@@ -49,10 +53,14 @@ fi
 echo ""
 echo "Development environment setup complete!"
 echo ""
-echo "Installed tools:"
-echo "  Deno: $(deno --version 2>/dev/null | head -n1 || echo 'not found in PATH')"
-echo "  Node: $(node --version 2>/dev/null || echo 'not found in PATH')"
-echo "  Bun:  $(bun --version 2>/dev/null || echo 'not found in PATH')"
+echo "Installed tools (restart your shell to update PATH):"
+# Try to use tools from their installation paths if not in PATH
+DENO_VERSION=$(deno --version 2>/dev/null | head -n1 || "$HOME/.deno/bin/deno" --version 2>/dev/null | head -n1 || echo 'not found')
+NODE_VERSION=$(node --version 2>/dev/null || echo 'not found')
+BUN_VERSION=$(bun --version 2>/dev/null || "$HOME/.bun/bin/bun" --version 2>/dev/null || echo 'not found')
+echo "  Deno: $DENO_VERSION"
+echo "  Node: $NODE_VERSION"
+echo "  Bun:  $BUN_VERSION"
 
 # Network access configuration
 # The following domains are allowed for this workspace:
