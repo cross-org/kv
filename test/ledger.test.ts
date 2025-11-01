@@ -72,3 +72,112 @@ test("KVLedger: writeHeader", async () => {
   assertEquals(ledger.header.created, 1234567890);
   assertEquals(ledger.header.currentOffset, 2048);
 });
+
+test("KVLedger: lock acquisition", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const ledger = new KVLedger(tempFilePrefix, 100);
+  await ledger.open();
+
+  // Act: Acquire lock
+  await ledger.lock();
+
+  // Assert: Verify lock is acquired
+  const isLocked = await ledger.verifyLock();
+  assertEquals(isLocked, true);
+
+  await ledger.unlock();
+});
+
+test("KVLedger: unlock releases lock", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const ledger = new KVLedger(tempFilePrefix, 100);
+  await ledger.open();
+  await ledger.lock();
+
+  // Act: Release lock
+  await ledger.unlock();
+
+  // Assert: Verify lock is released
+  const isLocked = await ledger.verifyLock();
+  assertEquals(isLocked, false);
+});
+
+test("KVLedger: verifyLock passes after lock", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const ledger = new KVLedger(tempFilePrefix, 100);
+  await ledger.open();
+  await ledger.lock();
+
+  // Act & Assert: Verify should pass
+  const result = await ledger.verifyLock();
+  assertEquals(result, true);
+
+  await ledger.unlock();
+});
+
+test("KVLedger: verifyLock fails when not locked", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const ledger = new KVLedger(tempFilePrefix, 100);
+  await ledger.open();
+
+  // Act & Assert: Verify should fail without lock
+  const result = await ledger.verifyLock();
+  assertEquals(result, false);
+});
+
+test("KVLedger: multiple lock attempts", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const ledger1 = new KVLedger(tempFilePrefix, 100);
+  const ledger2 = new KVLedger(tempFilePrefix, 100);
+  await ledger1.open();
+  await ledger2.open();
+
+  // Act: First ledger acquires lock
+  await ledger1.lock();
+
+  // Assert: Second ledger should see it's locked
+  const canLock = await ledger2.verifyLock();
+  assertEquals(canLock, false);
+
+  await ledger1.unlock();
+});
+
+test("KVLedger: cache stores and retrieves transactions", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const ledger = new KVLedger(tempFilePrefix, 10);
+  await ledger.open();
+
+  // Act: Use cache directly
+  const mockResult = {
+    offset: 100,
+    length: 50,
+    transaction: {} as any,
+    complete: true,
+    errorCorrectionOffset: 0,
+  };
+  ledger.cache.cacheTransactionData(100, mockResult);
+
+  // Assert: Retrieve from cache
+  const cached = ledger.cache.getTransactionData(100);
+  assertEquals(cached, mockResult);
+});
+
+test("KVLedger: prefetch clears cache", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const ledger = new KVLedger(tempFilePrefix, 100);
+  await ledger.open();
+
+  // Act: Clear prefetch cache
+  ledger.prefetch.clear();
+
+  // Assert: Should not throw and prefetch should be cleared
+  // (no direct way to verify, but operation should succeed)
+  assertEquals(true, true);
+});

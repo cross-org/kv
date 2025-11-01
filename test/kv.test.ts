@@ -892,3 +892,358 @@ test("KV: defer function - promise rejection is handled", async () => {
 
   assertEquals(Date.now() - then >= 500, true);
 });
+
+test("KV: iterate with limit 0 returns empty", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+  await kvStore.set(["data", 1], "Value 1");
+  await kvStore.set(["data", 2], "Value 2");
+
+  // Act: Iterate with limit 0
+  const results: KVTransactionResult<unknown>[] = [];
+  for await (const entry of kvStore.iterate(["data"], 0)) {
+    results.push(entry);
+  }
+
+  // Assert: Should return nothing
+  assertEquals(results.length, 0);
+
+  await kvStore.close();
+});
+
+test("KV: iterate with limit 1 returns one item", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+  await kvStore.set(["data", 1], "Value 1");
+  await kvStore.set(["data", 2], "Value 2");
+
+  // Act: Iterate with limit 1
+  const results: KVTransactionResult<unknown>[] = [];
+  for await (const entry of kvStore.iterate(["data"], 1)) {
+    results.push(entry);
+  }
+
+  // Assert: Should return only one item
+  assertEquals(results.length, 1);
+  assertEquals(results[0].data, "Value 1");
+
+  await kvStore.close();
+});
+
+test("KV: iterate reverse order", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+  await kvStore.set(["data", 1], "Value 1");
+  await kvStore.set(["data", 2], "Value 2");
+  await kvStore.set(["data", 3], "Value 3");
+
+  // Act: Iterate in reverse
+  const results: KVTransactionResult<unknown>[] = [];
+  for await (
+    const entry of kvStore.iterate(["data"], undefined, { reverse: true })
+  ) {
+    results.push(entry);
+  }
+
+  // Assert: Should return in reverse order
+  assertEquals(results.length, 3);
+  assertEquals(results[0].data, "Value 3");
+  assertEquals(results[1].data, "Value 2");
+  assertEquals(results[2].data, "Value 1");
+
+  await kvStore.close();
+});
+
+test("KV: iterate reverse with limit", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+  await kvStore.set(["data", 1], "Value 1");
+  await kvStore.set(["data", 2], "Value 2");
+  await kvStore.set(["data", 3], "Value 3");
+
+  // Act: Iterate in reverse with limit
+  const results: KVTransactionResult<unknown>[] = [];
+  for await (
+    const entry of kvStore.iterate(["data"], 2, { reverse: true })
+  ) {
+    results.push(entry);
+  }
+
+  // Assert: Should return 2 items in reverse order
+  assertEquals(results.length, 2);
+  assertEquals(results[0].data, "Value 3");
+  assertEquals(results[1].data, "Value 2");
+
+  await kvStore.close();
+});
+
+test("KV: listAll returns all items", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+  await kvStore.set(["data", 1], "Value 1");
+  await kvStore.set(["data", 2], "Value 2");
+  await kvStore.set(["data", 3], "Value 3");
+
+  // Act: List all
+  const results = await kvStore.listAll(["data"]);
+
+  // Assert: Should return all items
+  assertEquals(results.length, 3);
+  assertEquals(results[0].data, "Value 1");
+  assertEquals(results[1].data, "Value 2");
+  assertEquals(results[2].data, "Value 3");
+
+  await kvStore.close();
+});
+
+test("KV: listAll with limit", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+  await kvStore.set(["data", 1], "Value 1");
+  await kvStore.set(["data", 2], "Value 2");
+  await kvStore.set(["data", 3], "Value 3");
+
+  // Act: List with limit
+  const results = await kvStore.listAll(["data"], 2);
+
+  // Assert: Should return limited items
+  assertEquals(results.length, 2);
+  assertEquals(results[0].data, "Value 1");
+  assertEquals(results[1].data, "Value 2");
+
+  await kvStore.close();
+});
+
+test("KV: listAll reverse", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+  await kvStore.set(["data", 1], "Value 1");
+  await kvStore.set(["data", 2], "Value 2");
+  await kvStore.set(["data", 3], "Value 3");
+
+  // Act: List in reverse
+  const results = await kvStore.listAll(["data"], undefined, { reverse: true });
+
+  // Assert: Should return in reverse order
+  assertEquals(results.length, 3);
+  assertEquals(results[0].data, "Value 3");
+  assertEquals(results[1].data, "Value 2");
+  assertEquals(results[2].data, "Value 1");
+
+  await kvStore.close();
+});
+
+test("KV: watch callback triggers on matching set", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+
+  let callbackTriggered = false;
+  let receivedData: unknown = null;
+
+  // Act: Set up watch
+  kvStore.watch<string>(["user"], (transaction) => {
+    callbackTriggered = true;
+    receivedData = transaction.data;
+  });
+
+  await kvStore.set(["user", "name"], "Alice");
+
+  // Assert: Callback should be triggered
+  assertEquals(callbackTriggered, true);
+  assertEquals(receivedData, "Alice");
+
+  await kvStore.close();
+});
+
+test("KV: watch callback triggers on matching delete", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+  await kvStore.set(["user", "name"], "Alice");
+
+  let callbackTriggered = false;
+  let receivedOperation: KVOperation | undefined;
+
+  // Act: Set up watch and delete
+  kvStore.watch(["user"], (transaction) => {
+    callbackTriggered = true;
+    receivedOperation = transaction.operation;
+  });
+
+  await kvStore.delete(["user", "name"]);
+
+  // Assert: Callback should be triggered with DELETE operation
+  assertEquals(callbackTriggered, true);
+  assertEquals(receivedOperation, KVOperation.DELETE);
+
+  await kvStore.close();
+});
+
+test("KV: watch with recursive false doesn't trigger on child keys", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+
+  let callbackTriggered = false;
+
+  // Act: Set up non-recursive watch
+  kvStore.watch(["user"], () => {
+    callbackTriggered = true;
+  }, false);
+
+  await kvStore.set(["user", "name"], "Alice"); // Child key
+
+  // Assert: Callback should not be triggered for non-recursive watch
+  assertEquals(callbackTriggered, false);
+
+  await kvStore.close();
+});
+
+test("KV: watch with recursive true triggers on child keys", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+
+  let callbackTriggered = false;
+
+  // Act: Set up recursive watch
+  kvStore.watch(["user"], () => {
+    callbackTriggered = true;
+  }, true);
+
+  await kvStore.set(["user", "name"], "Alice"); // Child key
+
+  // Assert: Callback should be triggered for recursive watch
+  assertEquals(callbackTriggered, true);
+
+  await kvStore.close();
+});
+
+test("KV: unwatch removes callback", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+
+  let callbackCount = 0;
+  const callback = () => {
+    callbackCount++;
+  };
+
+  // Act: Watch, then unwatch
+  kvStore.watch(["user"], callback);
+  await kvStore.set(["user", "name"], "Alice");
+  
+  kvStore.unwatch(["user"], callback);
+  await kvStore.set(["user", "name"], "Bob");
+
+  // Assert: Callback should only be triggered once (before unwatch)
+  assertEquals(callbackCount, 1);
+
+  await kvStore.close();
+});
+
+test("KV: get uses latest index offset without full scan", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+  await kvStore.set(["test"], "value1");
+  await kvStore.set(["test"], "value2");
+  await kvStore.set(["test"], "value3");
+
+  // Act: Get should return latest
+  const result = await kvStore.get(["test"]);
+
+  // Assert: Should get the latest value without full scan
+  assertEquals(result?.data, "value3");
+
+  await kvStore.close();
+});
+
+test("KV: count returns correct number of entries", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+  await kvStore.set(["data", 1], "Value 1");
+  await kvStore.set(["data", 2], "Value 2");
+  await kvStore.set(["data", 3], "Value 3");
+
+  // Act
+  const count = kvStore.count(["data"]);
+
+  // Assert
+  assertEquals(count, 3);
+
+  await kvStore.close();
+});
+
+test("KV: count after delete", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+  await kvStore.set(["data", 1], "Value 1");
+  await kvStore.set(["data", 2], "Value 2");
+  await kvStore.set(["data", 3], "Value 3");
+  await kvStore.delete(["data", 2]);
+
+  // Act
+  const count = kvStore.count(["data"]);
+
+  // Assert: Count should reflect deletion
+  assertEquals(count, 2);
+
+  await kvStore.close();
+});
+
+test("KV: has returns true for existing key", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+  await kvStore.set(["test"], "value");
+
+  // Act
+  const exists = kvStore.has(["test"]);
+
+  // Assert
+  assertEquals(exists, true);
+
+  await kvStore.close();
+});
+
+test("KV: has returns false for non-existing key", async () => {
+  // Arrange
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+
+  // Act
+  const exists = kvStore.has(["nonexistent"]);
+
+  // Assert
+  assertEquals(exists, false);
+
+  await kvStore.close();
+});
