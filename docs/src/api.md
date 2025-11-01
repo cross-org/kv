@@ -32,17 +32,26 @@ const db = new KV({
 
 #### Option Details
 
-- **autoSync** (boolean): 
-  - `true` (default): The in-memory index is automatically synchronized with the on-disk ledger in the background. This is recommended for multi-process scenarios.
-  - `false`: Automatic synchronization is disabled. You'll need to call `db.sync()` manually to keep the index up-to-date with other processes.
+- **autoSync** (boolean):
+  - `true` (default): The in-memory index is automatically synchronized with the
+    on-disk ledger in the background. This is recommended for multi-process
+    scenarios.
+  - `false`: Automatic synchronization is disabled. You'll need to call
+    `db.sync()` manually to keep the index up-to-date with other processes.
 
-- **syncIntervalMs** (number): Specifies the interval (in milliseconds) between automatic synchronization operations if autoSync is enabled. A shorter interval provides more up-to-date data but may introduce more overhead.
+- **syncIntervalMs** (number): Specifies the interval (in milliseconds) between
+  automatic synchronization operations if autoSync is enabled. A shorter
+  interval provides more up-to-date data but may introduce more overhead.
 
-- **ledgerCacheSize** (number): Sets the maximum amount of ledger data (in megabytes) to cache in memory. A larger cache can improve read performance but consumes more memory. (Default `100`).
+- **ledgerCacheSize** (number): Sets the maximum amount of ledger data (in
+  megabytes) to cache in memory. A larger cache can improve read performance but
+  consumes more memory. (Default `100`).
 
 - **disableIndex** (boolean):
-  - `false` (default): The in-memory index is enabled, allowing for efficient data retrieval and complex queries.
-  - `true`: The in-memory index is disabled, resulting in faster loading times but preventing the use of get, iterate, scan, and list.
+  - `false` (default): The in-memory index is enabled, allowing for efficient
+    data retrieval and complex queries.
+  - `true`: The in-memory index is disabled, resulting in faster loading times
+    but preventing the use of get, iterate, scan, and list.
 
 ## Methods
 
@@ -55,6 +64,7 @@ async open(filepath: string, createIfMissing = true, ignoreReadErrors = false): 
 ```
 
 **Parameters:**
+
 - `filepath`: Path to the database file
 - `createIfMissing`: Create the file if it doesn't exist (default: true)
 - `ignoreReadErrors`: Ignore read errors during initialization (default: false)
@@ -68,10 +78,12 @@ async set<T>(key: Key, value: T): Promise<void>
 ```
 
 **Parameters:**
+
 - `key`: Array of strings or numbers representing the key
 - `value`: Any serializable JavaScript value
 
 **Example:**
+
 ```typescript
 await db.set(["users", 1, "profile"], { name: "Alice", age: 30 });
 ```
@@ -84,9 +96,11 @@ Retrieves the value associated with the specified key.
 async get<T>(key: Key): Promise<T | null>
 ```
 
-**Returns:** The value associated with the key, or `null` if the key does not exist.
+**Returns:** The value associated with the key, or `null` if the key does not
+exist.
 
 **Example:**
+
 ```typescript
 const profile = await db.get(["users", 1, "profile"]);
 ```
@@ -100,6 +114,7 @@ async delete(key: Key): Promise<void>
 ```
 
 **Example:**
+
 ```typescript
 await db.delete(["users", 1, "profile"]);
 ```
@@ -113,11 +128,13 @@ async *iterate<T>(query: Query, limit?: number, reverse?: boolean): AsyncIterabl
 ```
 
 **Parameters:**
+
 - `query`: Query pattern to match keys
 - `limit`: Maximum number of entries to return (optional)
 - `reverse`: Iterate in reverse order (optional)
 
 **Example:**
+
 ```typescript
 for await (const entry of db.iterate(["users"])) {
   console.log(entry.key, entry.value);
@@ -133,19 +150,22 @@ async listAll<T>(query: Query, limit?: number, reverse?: boolean): Promise<KVEnt
 ```
 
 **Example:**
+
 ```typescript
 const users = await db.listAll(["users", { to: 10 }]);
 ```
 
 ### scan()
 
-Asynchronously iterates over the transaction history for keys matching the query.
+Asynchronously iterates over the transaction history for keys matching the
+query.
 
 ```typescript
 async *scan<T>(query: Query, limit?: number, reverse?: boolean, ignoreReadErrors = false): AsyncIterableIterator<KVEntry<T>>
 ```
 
 **Parameters:**
+
 - `query`: Query pattern to match keys
 - `limit`: Maximum number of entries to return (optional)
 - `reverse`: Iterate in reverse order (optional)
@@ -160,6 +180,7 @@ listKeys(query: Query): Key[]
 ```
 
 **Example:**
+
 ```typescript
 const keys = db.listKeys(["users"]);
 ```
@@ -173,6 +194,7 @@ watch<T>(query: Query, callback: WatchCallback<T>, recursive?: boolean): void
 ```
 
 **Example:**
+
 ```typescript
 db.watch(["users", {}, "interests"], (entry) => {
   console.log("New interest:", entry);
@@ -196,6 +218,7 @@ beginTransaction(): void
 ```
 
 **Example:**
+
 ```typescript
 db.beginTransaction();
 try {
@@ -240,6 +263,7 @@ on(eventName: string, callback: Function): void
 ```
 
 **Example:**
+
 ```typescript
 db.on("sync", (eventData) => {
   console.log("Sync result:", eventData.result);
@@ -278,14 +302,15 @@ Keys are arrays of strings or numbers:
 - Strings must only contain alphanumeric characters, hyphens, underscores or "@"
 
 **Example Keys:**
+
 ```typescript
-["users", 123]
-["products", "category", { from: 10, to: 20 }]
+["users", 123]["products", "category", { from: 10, to: 20 }];
 ```
 
 ## Values
 
-Values (or documents) can be any JavaScript primitive or complex object containing CBOR-serializable types:
+Values (or documents) can be any JavaScript primitive or complex object
+containing CBOR-serializable types:
 
 - Numbers: `12345`
 - Strings: `"Hello, world!"`
@@ -303,22 +328,12 @@ Queries are similar to keys but with additional support for ranges:
 
 ```typescript
 // All users
-["users"]
-
-// Specific user with ID 123
-["users", 123]
-
-// All products in any category
-["products", "category"]
-
-// Products in category with an id up to 20
-["products", "category", { to: 20 }]
-
-// Sub document "specification" of products in category 10 to 20
-["products", "category", { from: 10, to: 20 }, "specifications"]
-
-// Sub-document "author" of any book
-["products", "book", {}, "author"]
+["users"] // Specific user with ID 123
+  ["users", 123] // All products in any category
+  ["products", "category"] // Products in category with an id up to 20
+  ["products", "category", { to: 20 }] // Sub document "specification" of products in category 10 to 20
+  ["products", "category", { from: 10, to: 20 }, "specifications"] // Sub-document "author" of any book
+  ["products", "book", {}, "author"];
 ```
 
 ## Next Steps

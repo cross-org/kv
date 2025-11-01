@@ -251,10 +251,15 @@ db.on("sync", (eventData) => {
       console.log("Synchronization successful, new transactions added");
       break;
     case "ledgerInvalidated":
-      console.log("Ledger recreated, database reopened and index resynchronized");
+      console.log(
+        "Ledger recreated, database reopened and index resynchronized",
+      );
       break;
     case "error":
-      console.error("An error occurred during synchronization:", eventData.error);
+      console.error(
+        "An error occurred during synchronization:",
+        eventData.error,
+      );
       break;
   }
 });
@@ -304,7 +309,10 @@ await db.set(["config", "tags"], ["tag1", "tag2", "tag3"]);
 await db.set(["config", "created"], new Date());
 
 // Map
-await db.set(["config", "mapping"], new Map([["key1", "value1"], ["key2", "value2"]]));
+await db.set(
+  ["config", "mapping"],
+  new Map([["key1", "value1"], ["key2", "value2"]]),
+);
 
 // Set
 await db.set(["config", "unique"], new Set([1, 2, 3]));

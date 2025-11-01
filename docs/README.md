@@ -1,6 +1,7 @@
 # @cross/kv Documentation
 
-This directory contains the Lumocs-based documentation for @cross/kv, which is automatically built and deployed to GitHub Pages.
+This directory contains the Lumocs-based documentation for @cross/kv, which is
+automatically built and deployed to GitHub Pages.
 
 ## Structure
 
@@ -29,7 +30,9 @@ Then open http://localhost:8000 in your browser.
 
 ## Deployment
 
-The documentation is automatically built and deployed to GitHub Pages when changes are pushed to the `main` branch via the `.github/workflows/pages.yaml` workflow.
+The documentation is automatically built and deployed to GitHub Pages when
+changes are pushed to the `main` branch via the `.github/workflows/pages.yaml`
+workflow.
 
 ## Adding New Pages
 
@@ -47,6 +50,8 @@ The documentation is automatically built and deployed to GitHub Pages when chang
 ## Updating
 
 When updating the documentation:
-- Keep the KV_VERSION in `src/_data.json` synchronized with `deno.json` in the root
+
+- Keep the KV_VERSION in `src/_data.json` synchronized with `deno.json` in the
+  root
 - Update the changelog page when new versions are released
 - Ensure all code examples are tested and working

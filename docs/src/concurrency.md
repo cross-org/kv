@@ -7,13 +7,20 @@ nav_order: 5
 
 ---
 
-`@cross/kv` has a built-in mechanism for synchronizing the in-memory index with the transaction ledger, allowing multiple processes to work with the same database simultaneously.
+`@cross/kv` has a built-in mechanism for synchronizing the in-memory index with
+the transaction ledger, allowing multiple processes to work with the same
+database simultaneously.
 
-Due to the append-only design of the ledger, each process can update its internal state by reading all new transactions appended since the last processed transaction.
+Due to the append-only design of the ledger, each process can update its
+internal state by reading all new transactions appended since the last processed
+transaction.
 
 ## Single-Process Synchronization
 
-In single-process scenarios, explicit synchronization is often unnecessary. You can disable automatic synchronization by setting the `autoSync` option to `false`, eliminating automated `.sync()` calls. This can potentially improve performance when only one process accesses the database.
+In single-process scenarios, explicit synchronization is often unnecessary. You
+can disable automatic synchronization by setting the `autoSync` option to
+`false`, eliminating automated `.sync()` calls. This can potentially improve
+performance when only one process accesses the database.
 
 ```typescript
 import { KV } from "@cross/kv";
@@ -30,7 +37,9 @@ await db.set(["key"], "value");
 
 ## Multi-Process Synchronization
 
-In multi-process scenarios, synchronization is essential for maintaining data consistency. `@cross/kv` offers automatic index synchronization upon each data insertion and at a configurable interval (default: 1000ms).
+In multi-process scenarios, synchronization is essential for maintaining data
+consistency. `@cross/kv` offers automatic index synchronization upon each data
+insertion and at a configurable interval (default: 1000ms).
 
 ### Automatic Synchronization
 
@@ -47,7 +56,8 @@ await db.open("data/mydatabase.db");
 
 ### Custom Sync Interval
 
-You can customize the synchronization interval to balance consistency and performance:
+You can customize the synchronization interval to balance consistency and
+performance:
 
 ```typescript
 const db = new KV({
@@ -60,7 +70,8 @@ await db.open("data/mydatabase.db");
 
 ### Manual Synchronization
 
-For strict consistency guarantees, you can manually call `.sync()` before reading data:
+For strict consistency guarantees, you can manually call `.sync()` before
+reading data:
 
 ```typescript
 const db = new KV({
@@ -77,7 +88,8 @@ const result = await db.get(["my", "key"]);
 
 ## Monitoring Synchronization Events
 
-You can subscribe to the `sync` event to receive notifications about synchronization results and potential errors:
+You can subscribe to the `sync` event to receive notifications about
+synchronization results and potential errors:
 
 ```typescript
 const db = new KV();
@@ -188,7 +200,8 @@ console.log("Watching for changes...");
 ### For Single-Process Applications
 
 1. **Disable Auto-Sync**: Set `autoSync: false` to reduce overhead
-2. **Manual Sync When Needed**: Only call `.sync()` if you need to reload the database from disk
+2. **Manual Sync When Needed**: Only call `.sync()` if you need to reload the
+   database from disk
 
 ```typescript
 const db = new KV({ autoSync: false });
@@ -198,8 +211,10 @@ await db.open("data/single-process.db");
 ### For Multi-Process Applications
 
 1. **Enable Auto-Sync**: Keep `autoSync: true` (the default)
-2. **Tune Sync Interval**: Adjust `syncIntervalMs` based on your consistency requirements
-3. **Manual Sync for Critical Reads**: Call `.sync()` before reading if you need guaranteed up-to-date data
+2. **Tune Sync Interval**: Adjust `syncIntervalMs` based on your consistency
+   requirements
+3. **Manual Sync for Critical Reads**: Call `.sync()` before reading if you need
+   guaranteed up-to-date data
 4. **Monitor Sync Events**: Subscribe to sync events to detect issues early
 
 ```typescript
@@ -220,8 +235,10 @@ db.on("sync", (eventData) => {
 
 ### For High-Consistency Requirements
 
-1. **Shorter Sync Intervals**: Use a smaller `syncIntervalMs` value (e.g., 200-500ms)
-2. **Manual Sync Before Critical Operations**: Always sync before important reads
+1. **Shorter Sync Intervals**: Use a smaller `syncIntervalMs` value (e.g.,
+   200-500ms)
+2. **Manual Sync Before Critical Operations**: Always sync before important
+   reads
 
 ```typescript
 const db = new KV({
@@ -238,7 +255,8 @@ const criticalData = await db.get(["critical", "data"]);
 
 ### For High-Performance Requirements
 
-1. **Longer Sync Intervals**: Use a larger `syncIntervalMs` value (e.g., 2000-5000ms)
+1. **Longer Sync Intervals**: Use a larger `syncIntervalMs` value (e.g.,
+   2000-5000ms)
 2. **Batch Operations**: Use transactions to group multiple operations
 
 ```typescript

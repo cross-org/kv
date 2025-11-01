@@ -12,12 +12,14 @@ Contributions are welcome! Feel free to open issues or submit pull requests.
 ## Development Setup
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/cross-org/kv.git
 cd kv
 ```
 
 2. Install Deno (if not already installed):
+
 ```bash
 curl -fsSL https://deno.land/install.sh | sh
 ```
@@ -31,6 +33,7 @@ deno task check
 ```
 
 This command will:
+
 - Format check the code
 - Lint the code
 - Type check the code
@@ -46,7 +49,8 @@ To generate and view coverage reports with HTML output:
 deno task check-coverage
 ```
 
-Note: This requires `genhtml` to be available through the `lcov` package in most distributions.
+Note: This requires `genhtml` to be available through the `lcov` package in most
+distributions.
 
 ## Available Tasks
 
@@ -88,4 +92,5 @@ When reporting issues, please include:
 
 ## License
 
-By contributing to this project, you agree that your contributions will be licensed under the MIT License.
+By contributing to this project, you agree that your contributions will be
+licensed under the MIT License.
