@@ -292,11 +292,15 @@ test("Index Cache: corrupted cache file handled gracefully", async () => {
   await kvStore1.set(["key"], "value");
   await kvStore1.close();
 
-  // Corrupt the cache file by writing garbage
+  // Corrupt the cache file by writing garbage using cross-platform utilities
   const cacheFile = tempFilePrefix + ".idx";
-  const fd = await Deno.open(cacheFile, { write: true, truncate: true });
-  await fd.write(new TextEncoder().encode("GARBAGE DATA"));
-  fd.close();
+  const { rawOpen, writeAtPosition } = await import(
+    "../src/lib/utils/file.ts"
+  );
+  const fd = await rawOpen(cacheFile, true);
+  const garbageData = new TextEncoder().encode("GARBAGE DATA");
+  await writeAtPosition(fd, garbageData, 0);
+  await fd.close();
 
   // Should still be able to open (cache will be ignored)
   const kvStore2 = new KV({ enableIndexCache: true, autoSync: false });
