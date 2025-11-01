@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
 import { test } from "@cross/test";
 import { KVKeyInstance } from "../src/lib/key.ts";
 import {

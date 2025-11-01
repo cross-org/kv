@@ -1,7 +1,7 @@
 import { assertEquals } from "@std/assert";
 import { test } from "@cross/test";
 import { KVLedgerCache } from "../src/lib/cache.ts";
-import { KVTransaction, KVOperation, KVHashAlgorithm } from "../src/lib/transaction.ts";
+import { KVOperation, KVTransaction } from "../src/lib/transaction.ts";
 import { KVKeyInstance } from "../src/lib/key.ts";
 import type { KVLedgerResult } from "../src/lib/ledger.ts";
 
@@ -124,7 +124,10 @@ test("KVLedgerCache: respects max cache size", () => {
 
   // Act: Add many entries
   for (let i = 0; i < 10; i++) {
-    cache.cacheTransactionData(i * 100, createMockLedgerResult(i * 100, 40, `test${i}`));
+    cache.cacheTransactionData(
+      i * 100,
+      createMockLedgerResult(i * 100, 40, `test${i}`),
+    );
   }
 
   // Assert: Early entries should be evicted, later ones retained
@@ -170,10 +173,26 @@ test("KVLedgerCache: eviction order is FIFO", () => {
   cache.cacheTransactionData(400, createMockLedgerResult(400, 40, "fourth"));
 
   // Assert: First entries should be evicted in FIFO order
-  assertEquals(cache.getTransactionData(100), undefined, "First should be evicted");
-  assertEquals(cache.getTransactionData(200), undefined, "Second should be evicted");
-  assertEquals(cache.getTransactionData(300) !== undefined, true, "Third should remain");
-  assertEquals(cache.getTransactionData(400) !== undefined, true, "Fourth should remain");
+  assertEquals(
+    cache.getTransactionData(100),
+    undefined,
+    "First should be evicted",
+  );
+  assertEquals(
+    cache.getTransactionData(200),
+    undefined,
+    "Second should be evicted",
+  );
+  assertEquals(
+    cache.getTransactionData(300) !== undefined,
+    true,
+    "Third should remain",
+  );
+  assertEquals(
+    cache.getTransactionData(400) !== undefined,
+    true,
+    "Fourth should remain",
+  );
 });
 
 test("KVLedgerCache: get after eviction returns undefined", () => {
@@ -232,11 +251,18 @@ test("KVLedgerCache: handles multiple entries at different offsets", () => {
 
   // Act: Cache at various offsets
   offsets.forEach((offset) => {
-    cache.cacheTransactionData(offset, createMockLedgerResult(offset, 30, `test${offset}`));
+    cache.cacheTransactionData(
+      offset,
+      createMockLedgerResult(offset, 30, `test${offset}`),
+    );
   });
 
   // Assert: All should be retrievable
   offsets.forEach((offset) => {
-    assertEquals(cache.getTransactionData(offset) !== undefined, true, `Offset ${offset} should be cached`);
+    assertEquals(
+      cache.getTransactionData(offset) !== undefined,
+      true,
+      `Offset ${offset} should be cached`,
+    );
   });
 });

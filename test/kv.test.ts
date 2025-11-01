@@ -1152,7 +1152,7 @@ test("KV: unwatch removes callback", async () => {
   // Act: Watch, then unwatch
   kvStore.watch(["user"], callback);
   await kvStore.set(["user", "name"], "Alice");
-  
+
   kvStore.unwatch(["user"], callback);
   await kvStore.set(["user", "name"], "Bob");
 

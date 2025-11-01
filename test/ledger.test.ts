@@ -6,6 +6,7 @@ import {
   LEDGER_BASE_OFFSET,
   LEDGER_CURRENT_VERSION,
 } from "../src/lib/constants.ts";
+import { KVTransaction } from "../src/lib/transaction.ts";
 
 test("KVLedger: readHeader - valid header", async () => {
   // Arrange: Create a temporary ledger file with a valid header
@@ -154,10 +155,11 @@ test("KVLedger: cache stores and retrieves transactions", async () => {
   await ledger.open();
 
   // Act: Use cache directly
+  const mockTransaction = new KVTransaction();
   const mockResult = {
     offset: 100,
     length: 50,
-    transaction: {} as any,
+    transaction: mockTransaction,
     complete: true,
     errorCorrectionOffset: 0,
   };

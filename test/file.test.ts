@@ -1,7 +1,7 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { test } from "@cross/test";
 import { tempfile } from "@cross/fs";
-import { join, dirname } from "@std/path";
+import { join } from "@std/path";
 import {
   ensureFile,
   rawOpen,

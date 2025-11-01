@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { test } from "@cross/test";
-import { murmurHash, faultyMurmurHash } from "../src/lib/utils/murmur.ts";
+import { faultyMurmurHash, murmurHash } from "../src/lib/utils/murmur.ts";
 
 test("murmurHash: deterministic output for empty string", () => {
   // Act
@@ -162,8 +162,6 @@ test("faultyMurmurHash: different from murmurHash for certain inputs", () => {
   // Act: Test with strings that have different remainders
   const str3 = "abc"; // length 3, should differ
   const str2 = "ab"; // length 2, should differ
-  const str1 = "a"; // length 1, should be same
-  const str4 = "abcd"; // length 4, no remainder, should be same
 
   const normalHash3 = murmurHash(str3);
   const faultyHash3 = faultyMurmurHash(str3);

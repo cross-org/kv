@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals } from "@std/assert";
 import { test } from "@cross/test";
 import { tempfile } from "@cross/fs";
 import { KVPrefetcher } from "../src/lib/prefetcher.ts";
