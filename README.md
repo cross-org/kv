@@ -206,6 +206,7 @@ const db = new KV({
   syncIntervalMs: 1000, // Synchronization interval in milliseconds (default: 1000)
   ledgerCacheSize: 100, // Ledger cache size in megabytes (default: 100)
   disableIndex: false, // Disable in-memory index for faster loading but limited functionality (default: false)
+  enableIndexCache: true, // Enable persistent index caching for faster cold starts (default: true)
 });
 ```
 
@@ -232,6 +233,16 @@ Explanations:
     but preventing the use of get, iterate, scan, and list. This is suitable
     only when you need to append data to the ledger and don't require efficient
     querying.
+- **enableIndexCache** (boolean):
+  - `true` (default): Enables persistent caching of the in-memory index to a
+    separate `.idx` file alongside the database. On startup, the cached index is
+    loaded from disk instead of rebuilding it from scratch, significantly
+    improving cold start performance for large databases. The cache is
+    automatically invalidated when the ledger is recreated (e.g., after vacuum
+    operations) and includes validation checks to ensure consistency.
+  - `false`: Index caching is disabled. The index is rebuilt from the ledger on
+    every startup, which may be slower for large databases but eliminates the
+    `.idx` cache file.
 
 ## Concurrency
 

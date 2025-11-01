@@ -2,6 +2,7 @@
 
 // Internal dependencies
 import { KVIndex } from "./index.ts";
+import { KVIndexCache } from "./index-cache.ts";
 import { type KVKey, KVKeyInstance, type KVQuery } from "./key.ts";
 import {
   KVHashAlgorithm,
@@ -115,6 +116,20 @@ export interface KVOptions {
    * @defaultValue `false`
    */
   disableIndex?: boolean;
+
+  /**
+   * Enables or disables persistent caching of the index to speed up cold starts.
+   *
+   * When enabled, the index is saved to disk and loaded on startup, avoiding the need
+   * to rebuild the entire index from the ledger. This significantly improves startup
+   * time for large databases.
+   *
+   * The cache is automatically invalidated if the ledger is recreated (e.g., after vacuum)
+   * or if version mismatches are detected.
+   *
+   * @defaultValue `true`
+   */
+  enableIndexCache?: boolean;
 }
 
 /**
@@ -126,6 +141,7 @@ export interface KVOptions {
 export class KV extends EventEmitter {
   // Storage
   private index: KVIndex = new KVIndex();
+  private indexCache?: KVIndexCache;
   private ledger?: KVLedger;
   private pendingTransactions: KVTransaction[] = [];
   private watchHandlers: WatchHandler<any>[] = [];
@@ -138,6 +154,7 @@ export class KV extends EventEmitter {
   /** Public only for testing purposes */
   public syncIntervalMs: number = SYNC_INTERVAL_MS;
   private disableIndex = false;
+  private enableIndexCache = true;
 
   // States
   private aborted: boolean = false;
@@ -196,6 +213,14 @@ export class KV extends EventEmitter {
       throw new TypeError("Invalid option: disableIndex must be a boolean");
     }
     this.disableIndex = options.disableIndex ?? false;
+    // - enableIndexCache
+    if (
+      options.enableIndexCache !== undefined &&
+      typeof options.enableIndexCache !== "boolean"
+    ) {
+      throw new TypeError("Invalid option: enableIndexCache must be a boolean");
+    }
+    this.enableIndexCache = options.enableIndexCache ?? true;
 
     if (this.autoSync) {
       this.watchdogPromise = this.watchdog();
@@ -276,9 +301,28 @@ export class KV extends EventEmitter {
     this.ledger = new KVLedger(filePath, this.ledgerCacheSize);
     this.ledgerPath = filePath;
     await this.ledger.open(createIfMissing);
-    // Do the initial synchronization
-    // - If `this.autoSync` is enabled, additional synchronizations will be carried out every `this.syncIntervalMs`
 
+    // Initialize index cache if enabled
+    if (this.enableIndexCache && !this.disableIndex) {
+      this.indexCache = new KVIndexCache(filePath);
+    }
+
+    // Try to load index from cache if available
+    if (this.indexCache && this.enableIndexCache && !this.disableIndex) {
+      const cachedIndex = await this.indexCache.load(
+        this.ledger.header.created,
+      );
+      if (cachedIndex) {
+        // Use the cached index and update the ledger's current offset
+        this.index = cachedIndex.index;
+        // Update internal state to reflect cached offset
+        this.ledger.header.currentOffset = cachedIndex.ledgerOffset;
+      }
+    }
+
+    // Do the initial synchronization
+    // - If index was loaded from cache, this will only sync new transactions
+    // - If `this.autoSync` is enabled, additional synchronizations will be carried out every `this.syncIntervalMs`
     const syncResult = await this.sync(ignoreTransactionErrors);
     if (syncResult.errors?.length > 0 && !ignoreTransactionErrors) {
       throw syncResult.errors[0];
@@ -525,7 +569,13 @@ export class KV extends EventEmitter {
     this.ensureIndex();
 
     const ledgerIsReplaced = await this.ledger?.vacuum(ignoreReadErrors);
-    if (ledgerIsReplaced) await this.open(this.ledgerPath!, false);
+    if (ledgerIsReplaced) {
+      // Delete the index cache since the ledger was replaced
+      if (this.indexCache && this.enableIndexCache) {
+        await this.indexCache.delete();
+      }
+      await this.open(this.ledgerPath!, false);
+    }
   }
 
   /**
@@ -952,6 +1002,20 @@ export class KV extends EventEmitter {
         console.error("Error during database close:", error);
       }
     } finally {
+      // Save index cache before closing if enabled
+      if (
+        this.indexCache &&
+        this.enableIndexCache &&
+        !this.disableIndex &&
+        this.ledger
+      ) {
+        await this.indexCache.save(
+          this.index,
+          this.ledger.header.created,
+          this.ledger.header.currentOffset,
+        );
+      }
+
       // Clear watchdog timer regardless of errors
       clearTimeout(this.watchdogTimer!);
 
@@ -959,6 +1023,7 @@ export class KV extends EventEmitter {
       this.ledgerPath = undefined;
       this.ledger = undefined;
       this.index = new KVIndex();
+      this.indexCache = undefined;
       this.pendingTransactions = [];
       this.watchHandlers = [];
     }

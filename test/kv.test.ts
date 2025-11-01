@@ -70,7 +70,7 @@ test("KV: set, get and delete (big numbers)", async () => {
     54645645646546345634523452345234545464,
   );
 
-  kvStore.close();
+  await kvStore.close();
 
   const kvStore2 = new KV({ autoSync: false });
   await kvStore2.open(tempFilePrefix);
@@ -80,7 +80,7 @@ test("KV: set, get and delete (big numbers)", async () => {
     54645645646546345634523452345234545464,
   );
 
-  kvStore2.close();
+  await kvStore2.close();
 });
 
 test("KV: set, get and delete (objects)", async () => {
@@ -311,17 +311,17 @@ test("KV: vacuum", async () => {
     "Remaining data should be the same",
   );
 
-  kvStore.close();
+  await kvStore.close();
 });
 
-test("KV Options: defaults work correctly", () => {
+test("KV Options: defaults work correctly", async () => {
   const kv = new KV(); // No options provided
   assertEquals(kv.autoSync, true);
   assertEquals(kv.syncIntervalMs, SYNC_INTERVAL_MS);
-  kv.close();
+  await kv.close();
 });
 
-test("KV Options: custom options are applied", () => {
+test("KV Options: custom options are applied", async () => {
   const options: KVOptions = {
     autoSync: false,
     syncIntervalMs: 5000,
@@ -329,7 +329,7 @@ test("KV Options: custom options are applied", () => {
   const kv = new KV(options);
   assertEquals(kv.autoSync, false);
   assertEquals(kv.syncIntervalMs, 5000);
-  kv.close();
+  await kv.close();
 });
 
 test("KV Options: throws on invalid autoSync type", () => {
