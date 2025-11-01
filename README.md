@@ -285,6 +285,10 @@ kvStore.on("sync", (eventData) => {
 });
 ```
 
+## Changelog
+
+See the full changelog in the docs site source: [docs/src/changelog.md](./docs/src/changelog.md).
+
 ## Contributing
 
 Contributions are welcome! Feel free to open issues or submit pull requests.

@@ -3,6 +3,13 @@ title: "Changelog"
 nav_order: 6
 ---
 
+## 0.17.4
+
+- Fix three-level context nesting silent failure in Deno runtime
+## 0.17.3
+
+- Fix nested context.step() hanging in Node.js and Bun
+
 ## 0.17.2
 
 - Update to work with Deno 2.0
