@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { test } from "@cross/test";
 import { KVKeyInstance } from "../src/lib/key.ts";
 import {
@@ -336,9 +336,9 @@ test("KVTransaction: hash mismatch error", async () => {
 
   // Act & Assert: Try to decode with wrong data (should fail hash check)
   const wrongData = new Uint8Array([1, 2, 3, 4, 5]);
-  await assertThrows(
-    async () => {
-      await decoded.dataFromUint8Array(wrongData);
+  assertThrows(
+    () => {
+      decoded.dataFromUint8Array(wrongData);
     },
     Error,
     "Invalid data: Read data not matching hash",
@@ -387,16 +387,16 @@ test("KVTransaction: extra data in header", () => {
   );
 });
 
-test("KVTransaction: create without value for SET throws error", async () => {
+test("KVTransaction: create without value for SET throws error", () => {
   // Arrange
   const key = new KVKeyInstance(["test"]);
   const timestamp = Date.now();
 
   // Act & Assert: SET operation without value should throw
   const transaction = new KVTransaction();
-  await assertThrows(
-    async () => {
-      await transaction.create(
+  assertThrows(
+    () => {
+      transaction.create(
         key,
         KVOperation.SET,
         timestamp,
@@ -409,16 +409,16 @@ test("KVTransaction: create without value for SET throws error", async () => {
   );
 });
 
-test("KVTransaction: incorrect hash algorithm throws error", async () => {
+test("KVTransaction: incorrect hash algorithm throws error", () => {
   // Arrange
   const key = new KVKeyInstance(["test"]);
   const timestamp = Date.now();
 
   // Act & Assert: Invalid algorithm should throw
   const transaction = new KVTransaction();
-  await assertThrows(
-    async () => {
-      await transaction.create(
+  assertThrows(
+    () => {
+      transaction.create(
         key,
         KVOperation.SET,
         timestamp,
