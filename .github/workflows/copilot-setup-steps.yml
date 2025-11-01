@@ -8,9 +8,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup Deno
-        uses: denoland/setup-deno@v1
+        uses: denoland/setup-deno@v2
         with:
-          deno-version: v1.x
+          deno-version: v2.x
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -18,7 +18,7 @@ jobs:
           node-version: 'lts/*'
       
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
@@ -34,7 +34,11 @@ jobs:
 # Network access configuration
 # The following domains are allowed for this workspace:
 # - har.io (HTTP Archive resources)
-# - npmjs.org (NPM registry)
-# - deno.land (Deno registry and documentation)
+# - npmjs.org (NPM registry and packages)
+# - registry.npmjs.org (NPM package registry)
+# - deno.land (Deno runtime, modules, and documentation)
+# - jsr.io (JavaScript Registry)
+# - github.com (Source code, actions, and dependencies)
+# - raw.githubusercontent.com (Raw content from GitHub)
+# - bun.sh (Bun runtime and documentation)
 # - wikipedia.org (Reference documentation)
-# - github.com (Source code and dependencies)
