@@ -27,3 +27,7 @@ Docs:
 - Lives in docs/ (Lumocs). Keep README concise; link to docs pages.
 - Changelog lives at docs/src/changelog.md and should align with GitHub Releases.
 - If CI flips lint_docs=true, also run: deno doc --lint mod.ts
+
+Network access (Copilot workspace):
+- har.io, npmjs.org, registry.npmjs.org, deno.land, jsr.io
+- github.com, raw.githubusercontent.com, bun.sh, wikipedia.org
