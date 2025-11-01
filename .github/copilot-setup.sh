@@ -56,7 +56,7 @@ echo ""
 echo "Installed tools (restart your shell to update PATH):"
 # Try to use tools from their installation paths if not in PATH
 DENO_VERSION=$(deno --version 2>/dev/null | head -n1 || "$HOME/.deno/bin/deno" --version 2>/dev/null | head -n1 || echo 'not found')
-NODE_VERSION=$(node --version 2>/dev/null || echo 'not found')
+NODE_VERSION=$(node --version 2>/dev/null || { [ -f "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" && node --version 2>/dev/null; } || echo 'not found')
 BUN_VERSION=$(bun --version 2>/dev/null || "$HOME/.bun/bin/bun" --version 2>/dev/null || echo 'not found')
 echo "  Deno: $DENO_VERSION"
 echo "  Node: $NODE_VERSION"
