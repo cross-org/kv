@@ -1,0 +1,33 @@
+{
+  "metas": {
+    "title": "=title",
+    "site": "@cross/kv - The Manual",
+    "lang": "en",
+    "description": "Fast, lightweight, powerful and cross-platform key-value database for Node.js, Deno, and Bun"
+  },
+  "substitute": {
+    "$KV_VERSION": "0.17.4"
+  },
+  "top_links": [
+    {
+      "icon": "fab fa-github",
+      "title": "GitHub Repository",
+      "url": "https://github.com/cross-org/kv"
+    },
+    {
+      "icon": "fas fa-cube",
+      "title": "JSR.io",
+      "url": "https://jsr.io/@cross/kv"
+    }
+  ],
+  "nav_links": [
+    {
+      "title": "GitHub Repository",
+      "url": "https://github.com/cross-org/kv"
+    },
+    {
+      "title": "JSR.io",
+      "url": "https://jsr.io/@cross/kv"
+    }
+  ]
+}
