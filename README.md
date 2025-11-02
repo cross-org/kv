@@ -287,7 +287,8 @@ kvStore.on("sync", (eventData) => {
 
 ## Changelog
 
-See the full changelog in the docs site source: [docs/src/changelog.md](./docs/src/changelog.md).
+See the full changelog in the docs site source:
+[docs/src/changelog.md](./docs/src/changelog.md).
 
 ## Contributing
 
@@ -296,6 +297,8 @@ Contributions are welcome! Feel free to open issues or submit pull requests.
 The task `deno task check` runs all tests, and is a good pre-commit check.
 `deno task check-coverage` do require `genhtml` available through the `lcov`
 package in most distributions.
+
+For a detailed code coverage analysis, see [COVERAGE.md](./COVERAGE.md).
 
 ## **License**
 

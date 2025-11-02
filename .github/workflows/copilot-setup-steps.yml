@@ -33,12 +33,12 @@ jobs:
         with:
           deno-version: v2.x
           cache: true
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
-      
+          node-version: "lts/*"
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
