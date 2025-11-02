@@ -946,7 +946,7 @@ test("KV: iterate reverse order", async () => {
   // Act: Iterate in reverse
   const results: KVTransactionResult<unknown>[] = [];
   for await (
-    const entry of kvStore.iterate(["data"], undefined, { reverse: true })
+    const entry of kvStore.iterate(["data"], undefined, true)
   ) {
     results.push(entry);
   }
@@ -972,7 +972,7 @@ test("KV: iterate reverse with limit", async () => {
   // Act: Iterate in reverse with limit
   const results: KVTransactionResult<unknown>[] = [];
   for await (
-    const entry of kvStore.iterate(["data"], 2, { reverse: true })
+    const entry of kvStore.iterate(["data"], 2, true)
   ) {
     results.push(entry);
   }
@@ -1036,7 +1036,7 @@ test("KV: listAll reverse", async () => {
   await kvStore.set(["data", 3], "Value 3");
 
   // Act: List in reverse
-  const results = await kvStore.listAll(["data"], undefined, { reverse: true });
+  const results = await kvStore.listAll(["data"], undefined, true);
 
   // Assert: Should return in reverse order
   assertEquals(results.length, 3);
@@ -1225,7 +1225,7 @@ test("KV: has returns true for existing key", async () => {
   await kvStore.set(["test"], "value");
 
   // Act
-  const exists = kvStore.has(["test"]);
+  const exists = kvStore.count(["test"]) > 0;
 
   // Assert
   assertEquals(exists, true);
@@ -1240,7 +1240,7 @@ test("KV: has returns false for non-existing key", async () => {
   await kvStore.open(tempFilePrefix);
 
   // Act
-  const exists = kvStore.has(["nonexistent"]);
+  const exists = kvStore.count(["nonexistent"]) > 0;
 
   // Assert
   assertEquals(exists, false);

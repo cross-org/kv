@@ -81,13 +81,13 @@ test("KVLedger: lock acquisition", async () => {
   await ledger.open();
 
   // Act: Acquire lock
-  await ledger.lock();
+  const lockId = await ledger.lock();
 
   // Assert: Verify lock is acquired
-  const isLocked = await ledger.verifyLock();
+  const isLocked = await ledger.verifyLock(lockId);
   assertEquals(isLocked, true);
 
-  await ledger.unlock();
+  await ledger.unlock(lockId);
 });
 
 test("KVLedger: unlock releases lock", async () => {
@@ -95,13 +95,13 @@ test("KVLedger: unlock releases lock", async () => {
   const tempFilePrefix = await tempfile();
   const ledger = new KVLedger(tempFilePrefix, 100);
   await ledger.open();
-  await ledger.lock();
+  const lockId = await ledger.lock();
 
   // Act: Release lock
-  await ledger.unlock();
+  await ledger.unlock(lockId);
 
   // Assert: Verify lock is released
-  const isLocked = await ledger.verifyLock();
+  const isLocked = await ledger.verifyLock(lockId);
   assertEquals(isLocked, false);
 });
 
@@ -110,13 +110,13 @@ test("KVLedger: verifyLock passes after lock", async () => {
   const tempFilePrefix = await tempfile();
   const ledger = new KVLedger(tempFilePrefix, 100);
   await ledger.open();
-  await ledger.lock();
+  const lockId = await ledger.lock();
 
   // Act & Assert: Verify should pass
-  const result = await ledger.verifyLock();
+  const result = await ledger.verifyLock(lockId);
   assertEquals(result, true);
 
-  await ledger.unlock();
+  await ledger.unlock(lockId);
 });
 
 test("KVLedger: verifyLock fails when not locked", async () => {
@@ -126,7 +126,7 @@ test("KVLedger: verifyLock fails when not locked", async () => {
   await ledger.open();
 
   // Act & Assert: Verify should fail without lock
-  const result = await ledger.verifyLock();
+  const result = await ledger.verifyLock(BigInt(0));
   assertEquals(result, false);
 });
 
@@ -139,13 +139,13 @@ test("KVLedger: multiple lock attempts", async () => {
   await ledger2.open();
 
   // Act: First ledger acquires lock
-  await ledger1.lock();
+  const lockId = await ledger1.lock();
 
   // Assert: Second ledger should see it's locked
-  const canLock = await ledger2.verifyLock();
+  const canLock = await ledger2.verifyLock(lockId);
   assertEquals(canLock, false);
 
-  await ledger1.unlock();
+  await ledger1.unlock(lockId);
 });
 
 test("KVLedger: cache stores and retrieves transactions", async () => {
