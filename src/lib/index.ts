@@ -39,6 +39,15 @@ export class KVIndex {
   }
 
   /**
+   * Sets the index to a specific structure.
+   * Used for loading from cache.
+   * @param indexContent - The index content to set
+   */
+  setIndex(indexContent: KVIndexContent) {
+    this.index = indexContent;
+  }
+
+  /**
    * Adds an entry to the index.
    * @throws {Error} If 'overwrite' is false and a duplicate key is found.
    */

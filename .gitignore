@@ -41,6 +41,7 @@ lab.ts
 local.ts
 mydatabase*/
 *.db
+*.idx
 
 # Pup data
 .pup
