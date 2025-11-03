@@ -151,7 +151,7 @@ test("KVTransaction: roundtrip with Date value", async () => {
   await decoded.dataFromUint8Array(transaction.data!);
 
   // Assert
-  assertEquals(decoded.asResult().data.getTime(), value.getTime());
+  assertEquals((decoded.asResult().data as Date).getTime(), value.getTime());
 });
 
 test("KVTransaction: roundtrip with Map value", async () => {
@@ -183,7 +183,7 @@ test("KVTransaction: roundtrip with Map value", async () => {
   await decoded.dataFromUint8Array(transaction.data!);
 
   // Assert
-  const result = decoded.asResult().data;
+  const result = decoded.asResult().data as Map<string, string>;
   assertEquals(result instanceof Map, true);
   assertEquals(result.get("theme"), "dark");
   assertEquals(result.get("lang"), "en");
@@ -218,7 +218,7 @@ test("KVTransaction: roundtrip with Set value", async () => {
   await decoded.dataFromUint8Array(transaction.data!);
 
   // Assert
-  const result = decoded.asResult().data;
+  const result = decoded.asResult().data as Set<string>;
   assertEquals(result instanceof Set, true);
   assertEquals(result.has("javascript"), true);
   assertEquals(result.has("typescript"), true);
