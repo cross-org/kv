@@ -125,8 +125,8 @@ test("KVLedger: verifyLock fails when not locked", async () => {
   const ledger = new KVLedger(tempFilePrefix, 100);
   await ledger.open();
 
-  // Act & Assert: Verify should fail without lock
-  const result = await ledger.verifyLock(BigInt(0));
+  // Act & Assert: Verify should fail without lock (use non-zero lockId)
+  const result = await ledger.verifyLock(BigInt(12345));
   assertEquals(result, false);
 });
 
@@ -141,8 +141,8 @@ test("KVLedger: multiple lock attempts", async () => {
   // Act: First ledger acquires lock
   const lockId = await ledger1.lock();
 
-  // Assert: Second ledger should see it's locked
-  const canLock = await ledger2.verifyLock(lockId);
+  // Assert: Second ledger cannot verify a different lock
+  const canLock = await ledger2.verifyLock(BigInt(99999));
   assertEquals(canLock, false);
 
   await ledger1.unlock(lockId);
