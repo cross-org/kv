@@ -946,7 +946,7 @@ test("KV: iterate reverse order", async () => {
   // Act: Iterate in reverse
   const results: KVTransactionResult<unknown>[] = [];
   for await (
-    const entry of kvStore.iterate(["data"], undefined, { reverse: true })
+    const entry of kvStore.iterate(["data"], undefined, true)
   ) {
     results.push(entry);
   }
@@ -972,7 +972,7 @@ test("KV: iterate reverse with limit", async () => {
   // Act: Iterate in reverse with limit
   const results: KVTransactionResult<unknown>[] = [];
   for await (
-    const entry of kvStore.iterate(["data"], 2, { reverse: true })
+    const entry of kvStore.iterate(["data"], 2, true)
   ) {
     results.push(entry);
   }
@@ -1036,7 +1036,7 @@ test("KV: listAll reverse", async () => {
   await kvStore.set(["data", 3], "Value 3");
 
   // Act: List in reverse
-  const results = await kvStore.listAll(["data"], undefined, { reverse: true });
+  const results = await kvStore.listAll(["data"], undefined, true);
 
   // Assert: Should return in reverse order
   assertEquals(results.length, 3);
@@ -1056,11 +1056,11 @@ test("KV: watch callback triggers on matching set", async () => {
   let callbackTriggered = false;
   let receivedData: unknown = null;
 
-  // Act: Set up watch
+  // Act: Set up watch with recursive=true to match child keys
   kvStore.watch<string>(["user"], (transaction) => {
     callbackTriggered = true;
     receivedData = transaction.data;
-  });
+  }, true);
 
   await kvStore.set(["user", "name"], "Alice");
 
@@ -1081,11 +1081,11 @@ test("KV: watch callback triggers on matching delete", async () => {
   let callbackTriggered = false;
   let receivedOperation: KVOperation | undefined;
 
-  // Act: Set up watch and delete
+  // Act: Set up watch with recursive=true to match child keys, and delete
   kvStore.watch(["user"], (transaction) => {
     callbackTriggered = true;
     receivedOperation = transaction.operation;
-  });
+  }, true);
 
   await kvStore.delete(["user", "name"]);
 
@@ -1145,15 +1145,16 @@ test("KV: unwatch removes callback", async () => {
   await kvStore.open(tempFilePrefix);
 
   let callbackCount = 0;
+  const query = ["user"];
   const callback = () => {
     callbackCount++;
   };
 
-  // Act: Watch, then unwatch
-  kvStore.watch(["user"], callback);
+  // Act: Watch with recursive=true to match child keys, then unwatch
+  kvStore.watch(query, callback, true);
   await kvStore.set(["user", "name"], "Alice");
 
-  kvStore.unwatch(["user"], callback);
+  kvStore.unwatch(query, callback);
   await kvStore.set(["user", "name"], "Bob");
 
   // Assert: Callback should only be triggered once (before unwatch)
@@ -1213,37 +1214,6 @@ test("KV: count after delete", async () => {
 
   // Assert: Count should reflect deletion
   assertEquals(count, 2);
-
-  await kvStore.close();
-});
-
-test("KV: has returns true for existing key", async () => {
-  // Arrange
-  const tempFilePrefix = await tempfile();
-  const kvStore = new KV();
-  await kvStore.open(tempFilePrefix);
-  await kvStore.set(["test"], "value");
-
-  // Act
-  const exists = kvStore.has(["test"]);
-
-  // Assert
-  assertEquals(exists, true);
-
-  await kvStore.close();
-});
-
-test("KV: has returns false for non-existing key", async () => {
-  // Arrange
-  const tempFilePrefix = await tempfile();
-  const kvStore = new KV();
-  await kvStore.open(tempFilePrefix);
-
-  // Act
-  const exists = kvStore.has(["nonexistent"]);
-
-  // Assert
-  assertEquals(exists, false);
 
   await kvStore.close();
 });

@@ -68,6 +68,7 @@ test("ensureFile: creates file when missing", async () => {
 test("ensureFile: no-op when file exists", async () => {
   // Arrange: Create a file first
   const tempFile = await tempfile();
+  await ensureFile(tempFile);
   const fd = await rawOpen(tempFile, true);
   await writeAtPosition(fd, new Uint8Array([1, 2, 3]), 0);
   await fd.close();
@@ -88,6 +89,7 @@ test("ensureFile: no-op when file exists", async () => {
 test("rawOpen: open in read-only mode", async () => {
   // Arrange: Create a file
   const tempFile = await tempfile();
+  await ensureFile(tempFile);
   const fdWrite = await rawOpen(tempFile, true);
   await writeAtPosition(fdWrite, new Uint8Array([1, 2, 3]), 0);
   await fdWrite.close();
@@ -105,6 +107,7 @@ test("rawOpen: open in read-only mode", async () => {
 test("rawOpen: open in write mode", async () => {
   // Arrange: Create a file
   const tempFile = await tempfile();
+  await ensureFile(tempFile);
 
   // Act: Open in write mode and write data
   const fd = await rawOpen(tempFile, true);
@@ -131,6 +134,7 @@ test("rawOpen: error with invalid path", async () => {
 test("readAtPosition: reads correct data at offset", async () => {
   // Arrange: Create a file with test data
   const tempFile = await tempfile();
+  await ensureFile(tempFile);
   const fd = await rawOpen(tempFile, true);
   const testData = new Uint8Array([10, 20, 30, 40, 50]);
   await writeAtPosition(fd, testData, 0);
@@ -147,6 +151,7 @@ test("readAtPosition: reads correct data at offset", async () => {
 test("readAtPosition: partial read near EOF", async () => {
   // Arrange: Create a file with limited data
   const tempFile = await tempfile();
+  await ensureFile(tempFile);
   const fd = await rawOpen(tempFile, true);
   const testData = new Uint8Array([1, 2, 3]);
   await writeAtPosition(fd, testData, 0);
@@ -164,6 +169,7 @@ test("readAtPosition: partial read near EOF", async () => {
 test("readAtPosition: read from position 0", async () => {
   // Arrange: Create a file
   const tempFile = await tempfile();
+  await ensureFile(tempFile);
   const fd = await rawOpen(tempFile, true);
   const testData = new Uint8Array([100, 101, 102]);
   await writeAtPosition(fd, testData, 0);
@@ -180,6 +186,7 @@ test("readAtPosition: read from position 0", async () => {
 test("readAtPosition: large buffer behavior", async () => {
   // Arrange: Create a file with larger data
   const tempFile = await tempfile();
+  await ensureFile(tempFile);
   const fd = await rawOpen(tempFile, true);
   const largeData = new Uint8Array(1024);
   for (let i = 0; i < 1024; i++) {
@@ -201,6 +208,7 @@ test("readAtPosition: large buffer behavior", async () => {
 test("writeAtPosition: writes correct data at offset", async () => {
   // Arrange: Create a file with initial data
   const tempFile = await tempfile();
+  await ensureFile(tempFile);
   const fd = await rawOpen(tempFile, true);
   const initialData = new Uint8Array([1, 2, 3, 4, 5]);
   await writeAtPosition(fd, initialData, 0);
@@ -218,6 +226,7 @@ test("writeAtPosition: writes correct data at offset", async () => {
 test("writeAtPosition: write at position 0", async () => {
   // Arrange: Create an empty file
   const tempFile = await tempfile();
+  await ensureFile(tempFile);
   const fd = await rawOpen(tempFile, true);
 
   // Act: Write at the beginning
@@ -233,6 +242,7 @@ test("writeAtPosition: write at position 0", async () => {
 test("writeAtPosition: write beyond current file size", async () => {
   // Arrange: Create a small file
   const tempFile = await tempfile();
+  await ensureFile(tempFile);
   const fd = await rawOpen(tempFile, true);
   await writeAtPosition(fd, new Uint8Array([1, 2]), 0);
 
@@ -249,6 +259,7 @@ test("writeAtPosition: write beyond current file size", async () => {
 test("writeAtPosition: large buffer write", async () => {
   // Arrange: Create a file
   const tempFile = await tempfile();
+  await ensureFile(tempFile);
   const fd = await rawOpen(tempFile, true);
   const largeData = new Uint8Array(2048);
   for (let i = 0; i < 2048; i++) {
