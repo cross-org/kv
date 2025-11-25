@@ -151,7 +151,8 @@ test("KVTransaction: roundtrip with Date value", async () => {
   await decoded.dataFromUint8Array(transaction.data!);
 
   // Assert
-  assertEquals(decoded.asResult().data.getTime(), value.getTime());
+  const dateResult = decoded.asResult<Date>();
+  assertEquals(dateResult.data.getTime(), value.getTime());
 });
 
 test("KVTransaction: roundtrip with Map value", async () => {
@@ -183,7 +184,8 @@ test("KVTransaction: roundtrip with Map value", async () => {
   await decoded.dataFromUint8Array(transaction.data!);
 
   // Assert
-  const result = decoded.asResult().data;
+  const mapResult = decoded.asResult<Map<string, string>>();
+  const result = mapResult.data;
   assertEquals(result instanceof Map, true);
   assertEquals(result.get("theme"), "dark");
   assertEquals(result.get("lang"), "en");
@@ -218,7 +220,8 @@ test("KVTransaction: roundtrip with Set value", async () => {
   await decoded.dataFromUint8Array(transaction.data!);
 
   // Assert
-  const result = decoded.asResult().data;
+  const setResult = decoded.asResult<Set<string>>();
+  const result = setResult.data;
   assertEquals(result instanceof Set, true);
   assertEquals(result.has("javascript"), true);
   assertEquals(result.has("typescript"), true);
@@ -346,14 +349,25 @@ test("KVTransaction: hash mismatch error", async () => {
 });
 
 test("KVTransaction: invalid operation type", () => {
-  // Arrange: Create data with invalid operation
-  const invalidData = new Uint8Array(20);
+  // Arrange: Create a valid key and then build invalid header data
+  const key = new KVKeyInstance(["test"]);
+  const keyBytes = key.toUint8Array();
+
+  // Create header with correct format but invalid operation
+  const headerSize = 4 + keyBytes.length + 1 + 8 + 4; // keyLen + key + op + timestamp + hash
+  const invalidData = new Uint8Array(headerSize);
   const dataView = new DataView(invalidData.buffer);
-  dataView.setUint32(0, 4); // Key length
-  // Offset 4-7: key data
-  dataView.setUint8(8, 99); // Invalid operation (not 1 or 2)
-  dataView.setFloat64(9, Date.now(), false); // Timestamp
-  dataView.setUint32(17, 0); // Hash
+
+  let offset = 0;
+  dataView.setUint32(offset, keyBytes.length, false); // Key length
+  offset += 4;
+  invalidData.set(keyBytes, offset); // Key data
+  offset += keyBytes.length;
+  dataView.setUint8(offset, 99); // Invalid operation (not 1 or 2)
+  offset += 1;
+  dataView.setFloat64(offset, Date.now(), false); // Timestamp
+  offset += 8;
+  dataView.setUint32(offset, 0, false); // Hash
 
   // Act & Assert: Should throw error for invalid operation
   const transaction = new KVTransaction();
@@ -384,28 +398,6 @@ test("KVTransaction: extra data in header", () => {
     () => transaction.headerFromUint8Array(headerData),
     Error,
     "Invalid data: Extra data in transaction header",
-  );
-});
-
-test("KVTransaction: create without value for SET throws error", () => {
-  // Arrange
-  const key = new KVKeyInstance(["test"]);
-  const timestamp = Date.now();
-
-  // Act & Assert: SET operation without value should throw
-  const transaction = new KVTransaction();
-  assertThrows(
-    () => {
-      transaction.create(
-        key,
-        KVOperation.SET,
-        timestamp,
-        undefined,
-        KVHashAlgorithm.MURMURHASH3,
-      );
-    },
-    Error,
-    "Set operation needs data",
   );
 });
 

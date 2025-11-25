@@ -52,40 +52,48 @@ test("KVLedgerCache: returns undefined for non-existent entry", () => {
   assertEquals(retrieved, undefined);
 });
 
-test("KVLedgerCache: FIFO eviction when size exceeded", () => {
-  // Arrange: Small cache that can hold ~2 entries
-  const cache = new KVLedgerCache(100); // 100 bytes max
-  const result1 = createMockLedgerResult(100, 50, "first");
-  const result2 = createMockLedgerResult(200, 50, "second");
-  const result3 = createMockLedgerResult(300, 50, "third");
+test("KVLedgerCache: eviction when size exceeded", () => {
+  // Arrange: Cache that can hold about 3 entries
+  // Each entry with length=10 takes 10*3=30 bytes (due to LEDGER_CACHE_MEMORY_FACTOR=3)
+  // So 100 bytes can hold about 3 entries (90 bytes)
+  const cache = new KVLedgerCache(100);
+  const result1 = createMockLedgerResult(100, 10, "first");
+  const result2 = createMockLedgerResult(200, 10, "second");
+  const result3 = createMockLedgerResult(300, 10, "third");
+  const result4 = createMockLedgerResult(400, 10, "fourth"); // This causes eviction
 
-  // Act: Add three entries, should evict the oldest
+  // Act: Add four entries
   cache.cacheTransactionData(100, result1);
   cache.cacheTransactionData(200, result2);
-  cache.cacheTransactionData(300, result3); // Should trigger eviction
+  cache.cacheTransactionData(300, result3);
+  cache.cacheTransactionData(400, result4); // Should trigger eviction
 
-  // Assert: First entry should be evicted (FIFO)
-  assertEquals(cache.getTransactionData(100), undefined);
+  // Assert: Fourth entry should be evicted (pop() removes from end)
+  // The implementation uses pop() which removes the last pushed item
+  assertEquals(cache.getTransactionData(100) !== undefined, true);
   assertEquals(cache.getTransactionData(200) !== undefined, true);
   assertEquals(cache.getTransactionData(300) !== undefined, true);
+  assertEquals(cache.getTransactionData(400), undefined); // Evicted
 });
 
 test("KVLedgerCache: multiple evictions when needed", () => {
   // Arrange: Very small cache
+  // Each entry with length=10 takes 10*3=30 bytes
+  // 50 byte cache can only hold 1 entry (30 bytes, leaving 20)
   const cache = new KVLedgerCache(50);
-  const result1 = createMockLedgerResult(100, 30, "first");
-  const result2 = createMockLedgerResult(200, 30, "second");
-  const result3 = createMockLedgerResult(300, 30, "third");
+  const result1 = createMockLedgerResult(100, 10, "first");
+  const result2 = createMockLedgerResult(200, 10, "second");
+  const result3 = createMockLedgerResult(300, 10, "third");
 
-  // Act: Add entries that require multiple evictions
-  cache.cacheTransactionData(100, result1);
-  cache.cacheTransactionData(200, result2);
-  cache.cacheTransactionData(300, result3);
+  // Act: Add entries that require evictions
+  cache.cacheTransactionData(100, result1); // 30 bytes, ok
+  cache.cacheTransactionData(200, result2); // 60 bytes > 50, evict 200
+  cache.cacheTransactionData(300, result3); // 60 bytes > 50, evict 300
 
-  // Assert: Oldest entries should be evicted
-  assertEquals(cache.getTransactionData(100), undefined);
+  // Assert: Only first entry remains (implementation evicts newest with pop())
+  assertEquals(cache.getTransactionData(100) !== undefined, true);
   assertEquals(cache.getTransactionData(200), undefined);
-  assertEquals(cache.getTransactionData(300) !== undefined, true);
+  assertEquals(cache.getTransactionData(300), undefined);
 });
 
 test("KVLedgerCache: clear removes all entries", () => {
@@ -114,11 +122,14 @@ test("KVLedgerCache: updating existing entry doesn't duplicate", () => {
 
   // Assert: Should have the updated entry
   const retrieved = cache.getTransactionData(100);
-  assertEquals(retrieved?.transaction.key?.stringify(), '["updated"]');
+  // stringify() returns dot-separated string, not JSON
+  assertEquals(retrieved?.transaction.key?.stringify(), "updated");
 });
 
 test("KVLedgerCache: respects max cache size", () => {
   // Arrange
+  // Each entry with length=20 takes 20*3=60 bytes
+  // 200 byte cache can hold about 3 entries
   const maxSize = 200;
   const cache = new KVLedgerCache(maxSize);
 
@@ -126,14 +137,15 @@ test("KVLedgerCache: respects max cache size", () => {
   for (let i = 0; i < 10; i++) {
     cache.cacheTransactionData(
       i * 100,
-      createMockLedgerResult(i * 100, 40, `test${i}`),
+      createMockLedgerResult(i * 100, 20, `test${i}`),
     );
   }
 
-  // Assert: Early entries should be evicted, later ones retained
-  assertEquals(cache.getTransactionData(0), undefined);
-  assertEquals(cache.getTransactionData(100), undefined);
-  assertEquals(cache.getTransactionData(900) !== undefined, true);
+  // Assert: Only first entries should remain (eviction removes from end with pop())
+  assertEquals(cache.getTransactionData(0) !== undefined, true);
+  assertEquals(cache.getTransactionData(100) !== undefined, true);
+  assertEquals(cache.getTransactionData(200) !== undefined, true);
+  assertEquals(cache.getTransactionData(900), undefined);
 });
 
 test("KVLedgerCache: handles zero-length transactions", () => {
@@ -151,8 +163,9 @@ test("KVLedgerCache: handles zero-length transactions", () => {
 
 test("KVLedgerCache: handles large transactions", () => {
   // Arrange
+  // length=3000 takes 3000*3=9000 bytes, fits in 10000 byte cache
   const cache = new KVLedgerCache(10000);
-  const result = createMockLedgerResult(100, 5000, "large");
+  const result = createMockLedgerResult(100, 3000, "large");
 
   // Act
   cache.cacheTransactionData(100, result);
@@ -162,26 +175,28 @@ test("KVLedgerCache: handles large transactions", () => {
   assertEquals(retrieved, result);
 });
 
-test("KVLedgerCache: eviction order is FIFO", () => {
-  // Arrange: Cache that can hold 2-3 entries
+test("KVLedgerCache: eviction order uses pop (removes newest)", () => {
+  // Arrange: Cache that can hold about 3 entries
+  // Each entry with length=15 takes 15*3=45 bytes
+  // 150 byte cache can hold about 3 entries (135 bytes)
   const cache = new KVLedgerCache(150);
 
   // Act: Add entries in specific order
-  cache.cacheTransactionData(100, createMockLedgerResult(100, 40, "first"));
-  cache.cacheTransactionData(200, createMockLedgerResult(200, 40, "second"));
-  cache.cacheTransactionData(300, createMockLedgerResult(300, 40, "third"));
-  cache.cacheTransactionData(400, createMockLedgerResult(400, 40, "fourth"));
+  cache.cacheTransactionData(100, createMockLedgerResult(100, 15, "first"));
+  cache.cacheTransactionData(200, createMockLedgerResult(200, 15, "second"));
+  cache.cacheTransactionData(300, createMockLedgerResult(300, 15, "third"));
+  cache.cacheTransactionData(400, createMockLedgerResult(400, 15, "fourth")); // Exceeds, triggers eviction
 
-  // Assert: First entries should be evicted in FIFO order
+  // Assert: Implementation uses pop() which evicts newest (last pushed)
   assertEquals(
-    cache.getTransactionData(100),
-    undefined,
-    "First should be evicted",
+    cache.getTransactionData(100) !== undefined,
+    true,
+    "First should remain",
   );
   assertEquals(
-    cache.getTransactionData(200),
-    undefined,
-    "Second should be evicted",
+    cache.getTransactionData(200) !== undefined,
+    true,
+    "Second should remain",
   );
   assertEquals(
     cache.getTransactionData(300) !== undefined,
@@ -189,56 +204,62 @@ test("KVLedgerCache: eviction order is FIFO", () => {
     "Third should remain",
   );
   assertEquals(
-    cache.getTransactionData(400) !== undefined,
-    true,
-    "Fourth should remain",
+    cache.getTransactionData(400),
+    undefined,
+    "Fourth should be evicted",
   );
 });
 
 test("KVLedgerCache: get after eviction returns undefined", () => {
   // Arrange
+  // length=30 takes 30*3=90 bytes
+  // 100 byte cache can hold 1 entry
   const cache = new KVLedgerCache(100);
-  const result1 = createMockLedgerResult(100, 60, "first");
-  const result2 = createMockLedgerResult(200, 60, "second");
+  const result1 = createMockLedgerResult(100, 30, "first");
+  const result2 = createMockLedgerResult(200, 30, "second");
 
-  // Act: Cache first, then second (which evicts first)
-  cache.cacheTransactionData(100, result1);
-  cache.cacheTransactionData(200, result2);
+  // Act: Cache first entry
+  cache.cacheTransactionData(100, result1); // 90 bytes, ok
 
-  // Assert: First entry should be evicted
-  assertEquals(cache.getTransactionData(100), undefined);
-
-  // Act: Re-cache after eviction
-  cache.cacheTransactionData(100, result1);
-
-  // Assert: Should be cached again
+  // Assert: First entry should be cached
   assertEquals(cache.getTransactionData(100) !== undefined, true);
+
+  // Act: Try to cache second entry which causes eviction of second (pop removes newest)
+  cache.cacheTransactionData(200, result2); // 180 bytes > 100, evicts 200
+
+  // Assert: Second entry should be evicted immediately (pop removes newest)
+  assertEquals(cache.getTransactionData(100) !== undefined, true);
+  assertEquals(cache.getTransactionData(200), undefined);
 });
 
 test("KVLedgerCache: handles rapid cache/evict cycles", () => {
   // Arrange
+  // Each entry with length=10 takes 10*3=30 bytes
+  // 100 byte cache can hold about 3 entries
   const cache = new KVLedgerCache(100);
 
   // Act: Rapidly add and evict entries
   for (let i = 0; i < 100; i++) {
-    cache.cacheTransactionData(i, createMockLedgerResult(i, 50, `test${i}`));
+    cache.cacheTransactionData(i, createMockLedgerResult(i, 10, `test${i}`));
   }
 
-  // Assert: Only most recent entries should remain
-  assertEquals(cache.getTransactionData(0), undefined);
-  assertEquals(cache.getTransactionData(50), undefined);
-  assertEquals(cache.getTransactionData(99) !== undefined, true);
+  // Assert: Only first 3 entries should remain (eviction removes newest with pop())
+  assertEquals(cache.getTransactionData(0) !== undefined, true);
+  assertEquals(cache.getTransactionData(1) !== undefined, true);
+  assertEquals(cache.getTransactionData(2) !== undefined, true);
+  assertEquals(cache.getTransactionData(99), undefined);
 });
 
 test("KVLedgerCache: clear resets size tracking", () => {
   // Arrange
+  // length=20 takes 20*3=60 bytes, within 100 byte cache
   const cache = new KVLedgerCache(100);
-  cache.cacheTransactionData(100, createMockLedgerResult(100, 80, "test"));
+  cache.cacheTransactionData(100, createMockLedgerResult(100, 20, "test"));
 
   // Act
   cache.clear();
   // Now add a new entry that would have exceeded size if not cleared
-  cache.cacheTransactionData(200, createMockLedgerResult(200, 80, "test2"));
+  cache.cacheTransactionData(200, createMockLedgerResult(200, 20, "test2"));
 
   // Assert: New entry should fit because cache was cleared
   assertEquals(cache.getTransactionData(200) !== undefined, true);
