@@ -3,6 +3,15 @@ title: "Changelog"
 nav_order: 6
 ---
 
+## 0.18.0
+
+- Add persistent index cache for faster cold starts (`enableIndexCache` option,
+  enabled by default)
+- Fix inconsistent equality operator in key validation (strict `!==` instead of
+  loose `!=`)
+- Improve test coverage for core modules
+- Add comprehensive code coverage documentation
+
 ## 0.17.4
 
 - Fix three-level context nesting silent failure in Deno runtime
