@@ -138,7 +138,7 @@ export class KVTransaction {
     algorithm?: KVHashAlgorithm,
   ) {
     // Validate
-    if (this.operation === KVOperation.SET && value === undefined) {
+    if (operation === KVOperation.SET && value === undefined) {
       throw new Error("Set operation needs data");
     }
     this.key = key;

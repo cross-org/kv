@@ -422,3 +422,25 @@ test("KVTransaction: incorrect hash algorithm throws error", () => {
     "Incorrect hash algorithm requested",
   );
 });
+
+test("KVTransaction: SET with undefined value throws error", () => {
+  // Arrange
+  const key = new KVKeyInstance(["test"]);
+  const timestamp = Date.now();
+
+  // Act & Assert: SET without a value should throw
+  const transaction = new KVTransaction();
+  assertThrows(
+    () => {
+      transaction.create(
+        key,
+        KVOperation.SET,
+        timestamp,
+        undefined,
+        KVHashAlgorithm.MURMURHASH3,
+      );
+    },
+    Error,
+    "Set operation needs data",
+  );
+});
