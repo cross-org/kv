@@ -15,8 +15,8 @@ import type { KVLedgerResult } from "./ledger.ts";
  *       Since offsets are numeric, objects provide faster lookups (O(1)) compared to `Map`
  *       in this specific use case.
  *
- *       Additionally, an array of inserted offsets is used to provide O(1) lookups of offsets
- *       to evict.
+ *       An array of inserted offsets in insertion order is maintained to support
+ *       FIFO eviction: the oldest (first-inserted) entry is evicted when the cache is full.
  */
 export class KVLedgerCache {
   private cache: Record<number, KVLedgerResult> = {};
@@ -71,8 +71,8 @@ export class KVLedgerCache {
    */
   private evictOldestEntries(): void {
     while (this.cacheSizeBytes > this.maxCacheSizeBytes) {
-      const oldestOffset = this.cacheEntries.pop() as number;
-      if (oldestOffset) {
+      const oldestOffset = this.cacheEntries.shift();
+      if (oldestOffset !== undefined) {
         const oldestData = this.cache[oldestOffset];
         delete this.cache[oldestOffset];
         this.cacheSizeBytes -= oldestData.length * LEDGER_CACHE_MEMORY_FACTOR;

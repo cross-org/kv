@@ -742,7 +742,7 @@ export class KV extends EventEmitter {
     const hashAlgo = this.ledger?.header.ledgerVersion === "B016"
       ? KVHashAlgorithm.FAULTY_MURMURHASH3
       : KVHashAlgorithm.MURMURHASH3;
-    await transaction.create(
+    transaction.create(
       validatedKey,
       KVOperation.SET,
       Date.now(),
@@ -809,7 +809,7 @@ export class KV extends EventEmitter {
     // Prepare transaction data and offsets
     let currentOffset = 0;
     for (const transaction of this.pendingTransactions) {
-      const transactionData = await transaction.toUint8Array();
+      const transactionData = transaction.toUint8Array();
       bufferedTransactions.push({
         transaction,
         transactionData,
