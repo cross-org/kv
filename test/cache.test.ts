@@ -68,12 +68,11 @@ test("KVLedgerCache: eviction when size exceeded", () => {
   cache.cacheTransactionData(300, result3);
   cache.cacheTransactionData(400, result4); // Should trigger eviction
 
-  // Assert: Fourth entry should be evicted (pop() removes from end)
-  // The implementation uses pop() which removes the last pushed item
-  assertEquals(cache.getTransactionData(100) !== undefined, true);
+  // Assert: First (oldest) entry should be evicted (shift() removes from front)
+  assertEquals(cache.getTransactionData(100), undefined); // Evicted (oldest)
   assertEquals(cache.getTransactionData(200) !== undefined, true);
   assertEquals(cache.getTransactionData(300) !== undefined, true);
-  assertEquals(cache.getTransactionData(400), undefined); // Evicted
+  assertEquals(cache.getTransactionData(400) !== undefined, true);
 });
 
 test("KVLedgerCache: multiple evictions when needed", () => {
@@ -87,13 +86,13 @@ test("KVLedgerCache: multiple evictions when needed", () => {
 
   // Act: Add entries that require evictions
   cache.cacheTransactionData(100, result1); // 30 bytes, ok
-  cache.cacheTransactionData(200, result2); // 60 bytes > 50, evict 200
-  cache.cacheTransactionData(300, result3); // 60 bytes > 50, evict 300
+  cache.cacheTransactionData(200, result2); // 60 bytes > 50, evict oldest (100)
+  cache.cacheTransactionData(300, result3); // 60 bytes > 50, evict oldest (200)
 
-  // Assert: Only first entry remains (implementation evicts newest with pop())
-  assertEquals(cache.getTransactionData(100) !== undefined, true);
+  // Assert: Only the most-recently added entry remains (eviction removes oldest with shift())
+  assertEquals(cache.getTransactionData(100), undefined);
   assertEquals(cache.getTransactionData(200), undefined);
-  assertEquals(cache.getTransactionData(300), undefined);
+  assertEquals(cache.getTransactionData(300) !== undefined, true);
 });
 
 test("KVLedgerCache: clear removes all entries", () => {
@@ -141,11 +140,11 @@ test("KVLedgerCache: respects max cache size", () => {
     );
   }
 
-  // Assert: Only first entries should remain (eviction removes from end with pop())
-  assertEquals(cache.getTransactionData(0) !== undefined, true);
-  assertEquals(cache.getTransactionData(100) !== undefined, true);
-  assertEquals(cache.getTransactionData(200) !== undefined, true);
-  assertEquals(cache.getTransactionData(900), undefined);
+  // Assert: Only last entries should remain (eviction removes oldest with shift())
+  assertEquals(cache.getTransactionData(0), undefined);
+  assertEquals(cache.getTransactionData(100), undefined);
+  assertEquals(cache.getTransactionData(200), undefined);
+  assertEquals(cache.getTransactionData(900) !== undefined, true);
 });
 
 test("KVLedgerCache: handles zero-length transactions", () => {
@@ -175,7 +174,7 @@ test("KVLedgerCache: handles large transactions", () => {
   assertEquals(retrieved, result);
 });
 
-test("KVLedgerCache: eviction order uses pop (removes newest)", () => {
+test("KVLedgerCache: eviction order uses shift (removes oldest)", () => {
   // Arrange: Cache that can hold about 3 entries
   // Each entry with length=15 takes 15*3=45 bytes
   // 150 byte cache can hold about 3 entries (135 bytes)
@@ -187,11 +186,11 @@ test("KVLedgerCache: eviction order uses pop (removes newest)", () => {
   cache.cacheTransactionData(300, createMockLedgerResult(300, 15, "third"));
   cache.cacheTransactionData(400, createMockLedgerResult(400, 15, "fourth")); // Exceeds, triggers eviction
 
-  // Assert: Implementation uses pop() which evicts newest (last pushed)
+  // Assert: Implementation uses shift() which evicts oldest (first pushed)
   assertEquals(
-    cache.getTransactionData(100) !== undefined,
-    true,
-    "First should remain",
+    cache.getTransactionData(100),
+    undefined,
+    "First (oldest) should be evicted",
   );
   assertEquals(
     cache.getTransactionData(200) !== undefined,
@@ -204,9 +203,9 @@ test("KVLedgerCache: eviction order uses pop (removes newest)", () => {
     "Third should remain",
   );
   assertEquals(
-    cache.getTransactionData(400),
-    undefined,
-    "Fourth should be evicted",
+    cache.getTransactionData(400) !== undefined,
+    true,
+    "Fourth should remain",
   );
 });
 
@@ -224,12 +223,12 @@ test("KVLedgerCache: get after eviction returns undefined", () => {
   // Assert: First entry should be cached
   assertEquals(cache.getTransactionData(100) !== undefined, true);
 
-  // Act: Try to cache second entry which causes eviction of second (pop removes newest)
-  cache.cacheTransactionData(200, result2); // 180 bytes > 100, evicts 200
+  // Act: Cache second entry which causes eviction of first (shift removes oldest)
+  cache.cacheTransactionData(200, result2); // 180 bytes > 100, evicts 100
 
-  // Assert: Second entry should be evicted immediately (pop removes newest)
-  assertEquals(cache.getTransactionData(100) !== undefined, true);
-  assertEquals(cache.getTransactionData(200), undefined);
+  // Assert: First entry should be evicted (shift removes oldest), second remains
+  assertEquals(cache.getTransactionData(100), undefined);
+  assertEquals(cache.getTransactionData(200) !== undefined, true);
 });
 
 test("KVLedgerCache: handles rapid cache/evict cycles", () => {
@@ -243,11 +242,11 @@ test("KVLedgerCache: handles rapid cache/evict cycles", () => {
     cache.cacheTransactionData(i, createMockLedgerResult(i, 10, `test${i}`));
   }
 
-  // Assert: Only first 3 entries should remain (eviction removes newest with pop())
-  assertEquals(cache.getTransactionData(0) !== undefined, true);
-  assertEquals(cache.getTransactionData(1) !== undefined, true);
-  assertEquals(cache.getTransactionData(2) !== undefined, true);
-  assertEquals(cache.getTransactionData(99), undefined);
+  // Assert: Only last 3 entries should remain (eviction removes oldest with shift())
+  assertEquals(cache.getTransactionData(0), undefined);
+  assertEquals(cache.getTransactionData(97) !== undefined, true);
+  assertEquals(cache.getTransactionData(98) !== undefined, true);
+  assertEquals(cache.getTransactionData(99) !== undefined, true);
 });
 
 test("KVLedgerCache: clear resets size tracking", () => {

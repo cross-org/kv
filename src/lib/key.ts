@@ -300,20 +300,6 @@ export class KVKeyInstance {
       } else {
         throw new Error(`Invalid query element type at index ${i}`);
       }
-
-      // Recursively check descendants if needed
-      if (recursive && thisKey.length > i + 1) {
-        const subquery = query.slice(i + 1);
-        const subkey = thisKey.slice(i + 1);
-        if (
-          !new KVKeyInstance(subkey, true, false).matchesQuery(
-            subquery,
-            recursive,
-          )
-        ) {
-          return false;
-        }
-      }
     }
 
     return true; // All elements match

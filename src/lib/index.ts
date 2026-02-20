@@ -131,7 +131,8 @@ export class KVIndex {
    */
   get(key: KVKeyInstance, limit?: number, reverse: boolean = false): number[] {
     const resultSet: number[] = [];
-    const keyLength = key.get().length;
+    const keyParts = key.get();
+    const keyLength = keyParts.length;
 
     function recurse(node: KVIndexContent, keyIndex: number): void {
       if (keyIndex >= keyLength) {
@@ -146,7 +147,7 @@ export class KVIndex {
         return;
       }
 
-      const keyPart = key.get()[keyIndex];
+      const keyPart = keyParts[keyIndex];
 
       if (typeof keyPart === "string" || typeof keyPart === "number") {
         // Standard string/number part
