@@ -17,7 +17,6 @@ import {
   LOCK_DEFAULT_INITIAL_RETRY_INTERVAL_MS,
   LOCK_DEFAULT_MAX_RETRIES,
   LOCK_STALE_TIMEOUT_MS,
-  LOCKED_BYTES,
   LOCKED_BYTES_LENGTH,
   SUPPORTED_LEDGER_VERSIONS,
   UNLOCKED_BYTES,
@@ -489,7 +488,7 @@ export class KVLedger {
           currentOffset += result.length + result.errorCorrectionOffset;
 
           // Update the header after each read, to make sure we catch any new transactions
-          this.readHeader();
+          await this.readHeader();
         } else if (!ignoreReadErrors) {
           throw new Error("Unexpected end of file");
         }
@@ -637,7 +636,7 @@ export class KVLedger {
         }
 
         // 2. Prepare lock data
-        const lockBytes = LOCKED_BYTES;
+        const lockBytes = new Uint8Array(LOCKED_BYTES_LENGTH);
         const lockView = new DataView(lockBytes.buffer);
         const lockId = pseudoRandomTimestamp(BigInt(Date.now()), 11); // A lock id is a regular timestamp with the last 11 bits scrambled
         lockView.setBigUint64(0, lockId, false);
