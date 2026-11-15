@@ -314,6 +314,27 @@ test("KV: vacuum", async () => {
   await kvStore.close();
 });
 
+test("KV: vacuum keeps distinct keys that stringify identically", async () => {
+  const tempFilePrefix = await tempfile();
+  const kvStore = new KV();
+  await kvStore.open(tempFilePrefix);
+
+  // Both keys stringify to "sensor.#1.5", but are distinct keys
+  await kvStore.set(["sensor", 1, "5"], "reading A");
+  await kvStore.set(["sensor", 1.5], "reading B");
+  await kvStore.vacuum();
+  assertEquals((await kvStore.get(["sensor", 1, "5"]))?.data, "reading A");
+  assertEquals((await kvStore.get(["sensor", 1.5]))?.data, "reading B");
+
+  // Deleting one of them must not remove the other on vacuum
+  await kvStore.delete(["sensor", 1.5]);
+  await kvStore.vacuum();
+  assertEquals((await kvStore.get(["sensor", 1, "5"]))?.data, "reading A");
+  assertEquals(await kvStore.get(["sensor", 1.5]), null);
+
+  await kvStore.close();
+});
+
 test("KV Options: defaults work correctly", async () => {
   const kv = new KV(); // No options provided
   assertEquals(kv.autoSync, true);
