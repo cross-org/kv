@@ -159,7 +159,7 @@ export class KV extends EventEmitter {
   // States
   private aborted: boolean = false;
   private isInTransaction: boolean = false;
-  private watchdogTimer?: number; // Undefined if not scheduled or currently running
+  private watchdogTimer?: ReturnType<typeof setTimeout>; // Undefined if not scheduled or currently running
   private watchdogPromise?: Promise<void>;
   /** Used through .deferCompletion to make .close await the action */
   private promiseWatchlist: Promise<unknown>[];
