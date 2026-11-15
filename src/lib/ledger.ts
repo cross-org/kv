@@ -24,7 +24,7 @@ import {
 import { KVHashAlgorithm, KVOperation, KVTransaction } from "./transaction.ts";
 import { rename, unlink } from "@cross/fs";
 import type { FileHandle } from "node:fs/promises";
-import type { KVQuery } from "./key.ts";
+import type { KVKeyInstance, KVQuery } from "./key.ts";
 import { KVLedgerCache } from "./cache.ts";
 import { KVPrefetcher } from "./prefetcher.ts";
 import { pseudoRandomTimestamp } from "./utils/randomts.ts";
@@ -54,6 +54,23 @@ interface KVLedgerHeader {
   ledgerVersion: string; // 4 bytes
   created: number;
   currentOffset: number;
+}
+
+/**
+ * Builds an unambiguous identity string for a key, used by vacuum() to track
+ * which keys have already been seen or deleted.
+ *
+ * KVKeyInstance.stringify() is not suitable here, as it is lossy: e.g.
+ * ["a", 1.5] and ["a", 1, "5"] both stringify to "a.#1.5". Each element is
+ * tagged with its type and the result is JSON-encoded, so distinct keys
+ * always get distinct identities.
+ */
+function vacuumKeyId(key: KVKeyInstance): string {
+  return JSON.stringify(
+    key.get().map((element) =>
+      typeof element === "number" ? `n${element}` : `s${element}`
+    ),
+  );
 }
 
 export interface KVLedgerResult {
@@ -511,13 +528,11 @@ export class KVLedger {
           ignoreReadErrors,
         );
         if (result) {
+          const keyId = vacuumKeyId(result.transaction.key!);
           if (result.transaction.operation === KVOperation.DELETE) {
-            removedKeys.add(result.transaction.key!.stringify());
-          } else if (
-            !(removedKeys.has(result.transaction.key?.stringify()!)) &&
-            !(addedKeys.has(result.transaction.key?.stringify()!))
-          ) {
-            addedKeys.add(result.transaction.key!.stringify());
+            removedKeys.add(keyId);
+          } else if (!removedKeys.has(keyId) && !addedKeys.has(keyId)) {
+            addedKeys.add(keyId);
             validTransactions.push(result);
           }
         } else if (!ignoreReadErrors) {
