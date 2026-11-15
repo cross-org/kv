@@ -3,6 +3,16 @@ title: "Changelog"
 nav_order: 6
 ---
 
+## 0.18.1
+
+- Fix `vacuum()` dropping live entries when distinct keys share the same string
+  form, e.g. `["sensor", 1.5]` and `["sensor", 1, "5"]` (#21)
+- Fix cache eviction order, redundant `matchesQuery` recursion, and sync/async
+  misuse (#20)
+- Fix a missing `await` on header reads during vacuum, shared lock byte buffer
+  reuse, and the undefined-value check for SET transactions (#19)
+- Fix `deno check` failure with newer Deno versions (`watchdogTimer` type)
+
 ## 0.18.0
 
 - Add persistent index cache for faster cold starts (`enableIndexCache` option,
